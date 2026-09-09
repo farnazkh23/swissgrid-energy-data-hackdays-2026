@@ -1,13 +1,15 @@
 """Format-neutral loading and adaptation of CSV, JSON, and optional Parquet files."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import csv
 import json
 from pathlib import Path
 from collections.abc import Mapping
+from datetime import datetime
 
 from .column_mapping import ColumnMapping
 from .dataset_contracts import DatasetContract
 from .real_source_adapter import RealRecordMetadata, RealSourceAdapter, RealSourceConfig
+from .raw_store import RawStore, StoreResult
 from .source_registry import SourceRegistry
 
 
@@ -26,6 +28,7 @@ class RealDataset:
     mapping: ColumnMapping
     pit_ready: bool
     known_at_policy: str
+    raw_receipt: StoreResult | None = None
 
     def __post_init__(self):
         if len(self.observations) != len(self.metadata) or len(self.raw_rows) != len(self.observations):
@@ -72,11 +75,40 @@ def load_rows(path: str | Path, *, format: str | None = None) -> tuple[dict, ...
 
 
 def load_real_dataset(path: str | Path, *, source_config: RealSourceConfig,
-                      format: str | None = None) -> RealDataset:
+                      format: str | None = None, raw_store: RawStore | None = None,
+                      raw_received_at: datetime | None = None) -> RealDataset:
+    """Load a local file without changing its bytes.
+
+    When ``raw_store`` is supplied, the exact input bytes are persisted before
+    adaptation and their digest is attached to every resulting observation.
+    A receipt clock is required because a local file's mtime is not evidence
+    of when retrieval completed.
+    """
+    path = Path(path)
+    raw_receipt = None
+    if raw_store is not None:
+        if not isinstance(raw_store, RawStore):
+            raise ValueError("raw_store must be a RawStore")
+        if raw_received_at is None:
+            raise ValueError("raw_received_at is required when raw_store is supplied")
+        payload = path.read_bytes()
+        # A snapshot is evidence for the whole mapped file. It is intentionally
+        # distinct from a provider source record and never changes revision IDs.
+        from hashlib import sha256
+        digest = sha256(payload).hexdigest()
+        raw_receipt = raw_store.put(
+            payload,
+            source_id=source_config.source_id or f"dataset:{source_config.dataset_id}",
+            source_record_id=f"{source_config.dataset_id}:{path.name}",
+            revision_id=f"snapshot:{digest}",
+            first_received_at=raw_received_at,
+            source_metadata={"dataset_id": source_config.dataset_id, "format": detect_format(path, format)},
+        )
     rows = load_rows(path, format=format)
     adapter = RealSourceAdapter(source_config)
     adapted = adapter.adapt_rows(rows)
-    observations = tuple(item[0] for item in adapted)
+    observations = tuple(replace(item[0], raw_sha256=raw_receipt.manifest.sha256)
+                         if raw_receipt is not None else item[0] for item in adapted)
     metadata = tuple(item[1] for item in adapted)
     contracts = {}
     units = {}
@@ -97,7 +129,7 @@ def load_real_dataset(path: str | Path, *, source_config: RealSourceConfig,
     # so downstream runners can refuse a manually constructed non-PIT dataset.
     pit_ready = source_config.known_at_policy == "require" or all(row.known_at is not None for row in observations)
     return RealDataset(source_config.dataset_id, observations, metadata, rows, registry, contract,
-                       source_config.mapping, pit_ready, source_config.known_at_policy)
+                       source_config.mapping, pit_ready, source_config.known_at_policy, raw_receipt)
 
 
 def load_configured_dataset(path: str | Path, config: Mapping) -> RealDataset:

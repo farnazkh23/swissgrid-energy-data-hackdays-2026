@@ -45,6 +45,8 @@ class DataAuditTests(unittest.TestCase):
         self.assertTrue(report.gaps["src"])
         self.assertGreater(report.missingness["src"]["missing_rows"], 0)
         self.assertGreater(report.revision_frequency["src"]["revision_rows"], 0)
+        self.assertEqual(report.source_coverage["src"]["rows"], 5)
+        self.assertEqual(report.revisions["src"]["revised_series"], 1)
         self.assertTrue(report.ready_for_forecast)
 
     def test_suspicious_future_availability_is_flagged(self):

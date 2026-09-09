@@ -28,3 +28,16 @@ class FeatureAuditTests(unittest.TestCase):
         plan = RollingOrigin(base + timedelta(hours=10), base + timedelta(hours=25),
                              timedelta(hours=8), timedelta(hours=3), timedelta(hours=1), timedelta(hours=6))
         self.assertGreaterEqual(univariate_oof_score(plan, rows, 0), 0)
+
+    def test_keep_drop_requires_explicit_multi_signal_policy(self):
+        report = audit_features(
+            {"keep_me": (1, 2, 3, 4), "drop_me": (4, 3, 2, 1)},
+            (1, 2, 3, 4), evaluation_id="eval-2",
+            univariate_scores={"keep_me": 1.0, "drop_me": 3.0},
+            incremental_oof_gains={"keep_me": .2, "drop_me": -.1},
+            fold_scores={"keep_me": (1, 1, 1), "drop_me": (3, 5, 4)},
+            recommendation_policy={"min_incremental_oof_gain": 0,
+                                   "min_fold_stability": .5,
+                                   "max_missingness": 0})
+        decisions = {record.feature_id: record.keep_drop for record in report.records}
+        self.assertEqual(decisions, {"keep_me": "KEEP", "drop_me": "DROP"})

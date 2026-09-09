@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from math import log, sqrt, isfinite
 from statistics import mean, pstdev
 from collections import Counter
+from collections.abc import Mapping
 
 from .feature_registry import FeatureAudit as RegistryFeatureAudit
 from .metrics import mae
@@ -104,6 +105,35 @@ def _mutual_information(pairs, bins=5):
                for (x, y), count in joint.items())
 
 
+def _recommend(record, policy):
+    """Make a review recommendation only from explicitly requested evidence."""
+    if policy is None:
+        return "UNDECIDED"
+    if not isinstance(policy, Mapping):
+        raise ValueError("recommendation_policy must be an object")
+    if record.leakage_risk.lower() in set(policy.get("drop_leakage_risk", ("high", "critical"))):
+        return "DROP"
+    definition = policy.get("enabled")
+    if definition is False:
+        return "DROP"
+    required = (record.incremental_oof_gain, record.stability_across_folds,
+                record.univariate_oof_score)
+    if policy.get("require_oof_evidence", True) and any(value is None for value in required):
+        return "UNDECIDED"
+    if record.missingness is None or record.missingness > float(policy.get("max_missingness", 1.0)):
+        return "DROP"
+    if (record.incremental_oof_gain is not None and
+            record.incremental_oof_gain < float(policy.get("min_incremental_oof_gain", 0.0))):
+        return "DROP"
+    if (record.stability_across_folds is not None and
+            record.stability_across_folds < float(policy.get("min_fold_stability", 0.0))):
+        return "DROP"
+    if (record.freshness is not None and policy.get("max_freshness_hours") is not None and
+            record.freshness.get("max", float("inf")) > float(policy["max_freshness_hours"])):
+        return "DROP"
+    return "KEEP"
+
+
 def univariate_oof_score(plan, rows: tuple[Sample, ...], feature_index: int) -> float:
     """Fold-safe conditional-mean OOF MAE for one feature column."""
     folds = plan.split(rows)
@@ -124,7 +154,7 @@ def univariate_oof_score(plan, rows: tuple[Sample, ...], feature_index: int) -> 
 def audit_features(feature_values: dict[str, tuple], target_values: tuple, *, evaluation_id: str,
                    feature_registry=None, freshness_by_feature=None, fold_scores=None,
                    univariate_scores=None, baseline_oof_score=None, full_oof_score=None,
-                   incremental_oof_gains=None) -> FeatureAuditReport:
+                   incremental_oof_gains=None, recommendation_policy=None) -> FeatureAuditReport:
     if not feature_values or not target_values or not evaluation_id:
         raise ValueError("feature values, target values, and evaluation identity are required")
     target_values = tuple(target_values)
@@ -148,16 +178,22 @@ def audit_features(feature_values: dict[str, tuple], target_values: tuple, *, ev
                                      if value is not None and isfinite(float(value)))
             freshness = {"mean": mean(freshness_values), "max": max(freshness_values),
                          "min": min(freshness_values)} if freshness_values else None
-        records.append(FeatureAuditRecord(
+        record = FeatureAuditRecord(
             feature_id, pearson, spearman, _mutual_information(pairs),
             None if univariate_scores is None else univariate_scores.get(feature_id),
             (None if incremental_oof_gains is None else incremental_oof_gains.get(feature_id))
             if incremental_oof_gains is not None else
             (None if baseline_oof_score is None or full_oof_score is None else baseline_oof_score - full_oof_score),
             fold_stability, sum(value is None for value in values) / len(values), freshness,
-            definition.leakage_risk if definition else "UNASSESSED"))
+            definition.leakage_risk if definition else "UNASSESSED",
+            "UNDECIDED")
+        records.append(FeatureAuditRecord(**{**record.to_dict(),
+                                             "keep_drop": _recommend(record, recommendation_policy)}))
+    policy_text = "Correlation is diagnostic only; feature decisions require fold-safe OOF evidence and stability."
+    if recommendation_policy is not None:
+        policy_text += " KEEP/DROP uses the explicit recommendation policy supplied by the caller."
     return FeatureAuditReport(evaluation_id, tuple(records),
-                              "Correlation is diagnostic only; feature decisions require fold-safe OOF evidence and stability.",
+                              policy_text,
                               ("Do not select features solely from correlation.",))
 
 

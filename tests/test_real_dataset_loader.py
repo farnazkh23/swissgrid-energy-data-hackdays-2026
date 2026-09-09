@@ -7,6 +7,7 @@ from pathlib import Path
 
 from swissgrid_forecaster.column_mapping import ColumnMapping
 from swissgrid_forecaster.real_dataset_loader import DatasetFormatError, load_real_dataset, load_rows
+from swissgrid_forecaster.raw_store import RawStore
 from swissgrid_forecaster.real_source_adapter import RealSourceConfig
 
 
@@ -61,3 +62,19 @@ class RealDatasetLoaderTests(unittest.TestCase):
                 self.skipTest("optional parquet engine is environment-dependent")
         else:
             self.skipTest("optional parquet engine is environment-dependent")
+
+    def test_optional_raw_store_preserves_exact_snapshot_and_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            path = directory / "data.csv"
+            fields = list(records()[0])
+            with path.open("w", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=fields)
+                writer.writeheader(); writer.writerows(records())
+            raw_store = RawStore(directory / "raw-evidence")
+            dataset = load_real_dataset(path, source_config=config(), raw_store=raw_store,
+                                        raw_received_at=T)
+            self.assertIsNotNone(dataset.raw_receipt)
+            self.assertEqual(dataset.raw_receipt.manifest.sha256,
+                             dataset.observations[0].raw_sha256)
+            self.assertEqual(raw_store.read(dataset.observations[0].raw_sha256), path.read_bytes())

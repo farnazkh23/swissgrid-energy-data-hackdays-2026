@@ -1,5 +1,5 @@
 """Pre-model data quality and point-in-time readiness audit."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from statistics import median
 from collections import Counter, defaultdict
@@ -29,6 +29,8 @@ class DataAuditReport:
     ready_for_forecast: bool
     warnings: tuple[str, ...]
     errors: tuple[str, ...]
+    source_coverage: dict = field(default_factory=dict)
+    revisions: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -42,6 +44,7 @@ class DataAuditReport:
             "stale_periods": self.stale_periods,
             "feature_availability_by_forecast_horizon": self.feature_availability_by_forecast_horizon,
             "pit_ready": self.pit_ready, "ready_for_forecast": self.ready_for_forecast,
+            "source_coverage": self.source_coverage, "revisions": self.revisions,
             "warnings": list(self.warnings), "errors": list(self.errors),
         }
 
@@ -106,26 +109,42 @@ def audit_dataset(dataset: RealDataset, *, issue_time: datetime,
     duplicates = {"duplicate_identity_groups": sum(count > 1 for count in identities.values()),
                   "duplicate_rows_after_first": duplicate_rows}
     revision_frequency = {}
+    revisions = {}
     for source, source_rows in grouped.items():
-        keys = {(row.source_record_id) for row in source_rows}
-        revised = sum(row.revision_sequence > 0 for row in source_rows)
+        by_record = defaultdict(list)
+        for row in source_rows:
+            by_record[row.source_record_id].append(row)
+        keys = set(by_record)
+        revised_series = {key for key, values in by_record.items()
+                          if len({row.revision_id for row in values}) > 1}
+        revised = sum(len({row.revision_id for row in values}) - 1 for values in by_record.values()
+                      if len({row.revision_id for row in values}) > 1)
         revision_frequency[source] = {"revision_rows": revised, "logical_series": len(keys),
                                       "fraction_of_rows": revised / len(source_rows) if source_rows else 0}
+        revisions[source] = {"logical_series": len(keys), "revised_series": len(revised_series),
+                             "revision_rows_after_first": revised,
+                             "lineage_edges": sum(row.supersedes_revision_id is not None for row in source_rows),
+                             "revision_ids": sorted({row.revision_id for row in source_rows})}
     units = defaultdict(set)
     for row in rows:
         units[row.source_id].add(row.unit)
     unit_consistency = {source: {"units": sorted(values), "consistent": len(values) == 1}
                         for source, values in sorted(units.items())}
-    timezone_issues = {"naive_timestamp_values": 0, "unparseable_timestamp_values": 0, "dst_review_required": False}
+    timezone_issues = {"configured_timezone": None, "naive_timestamp_values": 0,
+                       "unparseable_timestamp_values": 0, "mixed_offsets": False,
+                       "dst_review_required": False}
     # The raw envelope is retained by the loader so this audit can report
     # timezone problems even though the adapter rejects them before modeling.
     time_fields = ("event_time", "valid_time", "known_at", "first_received_at", "normalized_at", "publication_time", "issue_time")
     mapping = dataset.mapping
+    timezone_issues["configured_timezone"] = next(
+        (source.timezone for source in dataset.registry.list()), None)
+    offsets = set()
     if dataset.raw_rows and dataset.metadata:
         for raw in dataset.raw_rows:
             for field in time_fields:
                 column = mapping.column_for(field)
-                value = raw.get(column) if column is not None else None
+                value = raw.get(column) if column is not None else mapping.value(raw, field, default=None)
                 if value in (None, ""):
                     continue
                 parsed = _timestamp(value)
@@ -133,7 +152,12 @@ def audit_dataset(dataset: RealDataset, *, issue_time: datetime,
                     timezone_issues["unparseable_timestamp_values"] += 1
                 elif parsed.tzinfo is None or parsed.utcoffset() is None:
                     timezone_issues["naive_timestamp_values"] += 1
-    timezone_issues["dst_review_required"] = timezone_issues["naive_timestamp_values"] > 0
+                else:
+                    offsets.add(parsed.utcoffset())
+    timezone_issues["mixed_offsets"] = len(offsets) > 1
+    timezone_issues["dst_review_required"] = bool(
+        timezone_issues["naive_timestamp_values"] or timezone_issues["mixed_offsets"] or
+        (timezone_issues["configured_timezone"] not in (None, "UTC", "Etc/UTC")))
     future = {source: sum(row.known_at <= issue and row.event_time > issue for row in source_rows)
               for source, source_rows in sorted(grouped.items())}
     if any(future.values()):
@@ -146,6 +170,23 @@ def audit_dataset(dataset: RealDataset, *, issue_time: datetime,
         horizon_availability[key] = {source: any(row.known_at <= issue and row.valid_time == target_time
                                                 for row in source_rows)
                                      for source, source_rows in sorted(grouped.items())}
+    source_coverage = {}
+    for source, source_rows in sorted(grouped.items()):
+        eligible = tuple(row for row in source_rows if row.known_at <= issue)
+        source_coverage[source] = {
+            "rows": len(source_rows),
+            "distinct_event_times": len({row.event_time for row in source_rows}),
+            "distinct_valid_times": len({row.valid_time for row in source_rows}),
+            "available_as_of_issue": len(eligible),
+            "available_fraction": len(eligible) / len(source_rows) if source_rows else None,
+            "countries": sorted({metadata.country for row, metadata in zip(rows, dataset.metadata)
+                                  if row.source_id == source}),
+            "domains": sorted({metadata.domain.value for row, metadata in zip(rows, dataset.metadata)
+                                if row.source_id == source}),
+            "units": sorted({row.unit for row in source_rows}),
+            "date_range": [min(row.event_time for row in source_rows).isoformat(),
+                           max(row.event_time for row in source_rows).isoformat()],
+        }
     pit_ready = bool(dataset.pit_ready)
     if not pit_ready:
         errors.append("point-in-time metadata is unresolved")
@@ -166,4 +207,5 @@ def audit_dataset(dataset: RealDataset, *, issue_time: datetime,
     return DataAuditReport(dataset.dataset_id, issue, len(rows), date_range, cadence, missingness,
                            duplicates, revision_frequency, timezone_issues, unit_consistency,
                            gaps, future, stale, horizon_availability, pit_ready, ready,
-                           tuple(sorted(set(warnings))), tuple(sorted(set(errors))))
+                           tuple(sorted(set(warnings))), tuple(sorted(set(errors))),
+                           source_coverage, revisions)

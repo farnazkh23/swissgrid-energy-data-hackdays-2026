@@ -32,6 +32,8 @@ class RealChampionConfig:
     plan: RollingOrigin
     feature_source_ids: tuple[str, ...] = ()
     include_ridge: bool = True
+    feature_registry: FeatureRegistry | None = None
+    feature_recommendation_policy: dict | None = None
 
     def __post_init__(self):
         if not isinstance(self.target_contract, TargetContract):
@@ -47,6 +49,8 @@ class RealChampionConfig:
         if not self.feature_source_ids:
             raise ValueError("feature source IDs must be explicit")
         object.__setattr__(self, "feature_source_ids", tuple(self.feature_source_ids))
+        if self.feature_registry is not None and not isinstance(self.feature_registry, FeatureRegistry):
+            raise ValueError("feature_registry must be a FeatureRegistry")
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +67,7 @@ class RealChampionResult:
 
 def _feature_registry(source_ids, unit):
     return FeatureRegistry(tuple(
-        FeatureDefinition(f"real-{source}-value", "real-source", f"{source}_value", ("configured",), source,
+        FeatureDefinition(source, "real-source", f"{source}_value", ("configured",), source,
                           "known_at <= issue_time and event_time <= issue_time", (timedelta(hours=1),),
                           "latest_as_of_issue", "1", (), unit, "review", "propagate")
         for source in source_ids))
@@ -125,7 +129,8 @@ def _feature_audit(dataset, config, features, samples, *, incremental_oof_gains=
     return audit_features(feature_values, valid_target, evaluation_id="real-feature-audit-v1",
                           feature_registry=features, freshness_by_feature=freshness,
                           univariate_scores=univariate,
-                          incremental_oof_gains=incremental_oof_gains)
+                          incremental_oof_gains=incremental_oof_gains,
+                          recommendation_policy=config.feature_recommendation_policy)
 
 
 def run_real_champion(dataset: RealDataset, config: RealChampionConfig, *, output_dir=None) -> RealChampionResult:
@@ -139,7 +144,12 @@ def run_real_champion(dataset: RealDataset, config: RealChampionConfig, *, outpu
                      config.target_source_record_id).validate(dataset.registry)
     except ValueError as exc:
         raise RealChampionRefusal("target contract refused: " + str(exc)) from exc
-    features = _feature_registry(config.feature_source_ids, config.target_contract.unit)
+    features = config.feature_registry or _feature_registry(config.feature_source_ids, config.target_contract.unit)
+    missing_feature_definitions = set(config.feature_source_ids) - {
+        definition.feature_id for definition in features.definitions}
+    if missing_feature_definitions:
+        raise RealChampionRefusal("feature registry is missing configured sources: " +
+                                  ", ".join(sorted(missing_feature_definitions)))
     samples = build_real_samples(dataset, config)
     if any(row.target is None for row in samples):
         raise RealChampionRefusal("target rows are missing at one or more OOF horizons")
@@ -223,7 +233,8 @@ def main(argv=None):
                          _duration(plan_payload.get("label_delay_seconds", 0)))
     config = RealChampionConfig(target, payload["target_source_id"], payload["target_source_record_id"],
                                 tuple(datetime.fromisoformat(value) for value in payload["issue_times"]), plan,
-                                tuple(payload["feature_source_ids"]), payload.get("include_ridge", True))
+                                tuple(payload["feature_source_ids"]), payload.get("include_ridge", True),
+                                feature_recommendation_policy=payload.get("feature_recommendation_policy"))
     dataset = load_real_dataset(args.input, source_config=source)
     result = run_real_champion(dataset, config, output_dir=args.output_dir)
     print("real champion baseline run complete")

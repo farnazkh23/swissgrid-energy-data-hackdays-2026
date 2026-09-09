@@ -2,9 +2,8 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from collections.abc import Mapping, Iterable
-import json
 
-from .availability import earliest_known_at, nonempty, utc
+from .availability import nonempty, utc
 from .column_mapping import ColumnMapping
 from .observation_schema import Observation
 from .source_contracts import Domain, HorizonAvailability, SourceContract
@@ -61,6 +60,9 @@ class RealSourceConfig:
     unit: str | None = None
     revision_id_default: str | None = None
     revision_sequence_default: int | None = None
+    provider: str = "configured-real-dataset"
+    revision_policy: str = "mapping-provided revision sequence"
+    license_usage_notes: str = "Caller-provided real dataset; license and publication rules remain under review"
 
     def __post_init__(self):
         nonempty(self.dataset_id, "dataset_id")
@@ -76,7 +78,8 @@ class RealSourceConfig:
             raise ValueError("invalid horizon range")
         if self.known_at_policy not in KNOWN_AT_POLICIES:
             raise ValueError("unknown known_at policy")
-        for name in ("source_id", "country", "unit"):
+        for name in ("source_id", "country", "unit", "provider", "revision_policy",
+                     "license_usage_notes"):
             value = getattr(self, name)
             if value is not None:
                 nonempty(value, name)
@@ -103,13 +106,16 @@ class RealSourceConfig:
                    _parse_duration(horizons.get("maximum", 1), "horizon.maximum"),
                    payload.get("known_at_policy", "require"), payload.get("source_id"),
                    payload.get("country"), payload.get("domain"), payload.get("unit"),
-                   payload.get("revision_id_default"), payload.get("revision_sequence_default"))
+                   payload.get("revision_id_default"), payload.get("revision_sequence_default"),
+                   payload.get("provider", "configured-real-dataset"),
+                   payload.get("revision_policy", "mapping-provided revision sequence"),
+                   payload.get("license_usage_notes", "Caller-provided real dataset; license and publication rules remain under review"))
 
     def contract(self, source_id: str, country: str, domain: Domain, units: Iterable[str]) -> SourceContract:
-        return SourceContract(source_id, country, domain, "configured-real-dataset", self.timezone,
+        return SourceContract(source_id, country, domain, self.provider, self.timezone,
                               tuple(sorted(set(units))), self.update_cadence, self.publication_lag,
-                              "mapping-provided revision sequence", HorizonAvailability(self.horizon_minimum, self.horizon_maximum),
-                              "Caller-provided real dataset; license and publication rules remain under review")
+                              self.revision_policy, HorizonAvailability(self.horizon_minimum, self.horizon_maximum),
+                              self.license_usage_notes)
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,12 +129,14 @@ class RealRecordMetadata:
     target_name: str | None = None
     target_entity: str | None = None
     sign_convention: str | None = None
+    known_at_reconstructed: bool = False
 
     def to_dict(self):
         return {"source_id": self.source_id, "country": self.country, "domain": self.domain.value,
                 "unit": self.unit, "issue_time": self.issue_time.isoformat() if self.issue_time else None,
                 "horizon": str(self.horizon) if self.horizon else None, "target_name": self.target_name,
-                "target_entity": self.target_entity, "sign_convention": self.sign_convention}
+                "target_entity": self.target_entity, "sign_convention": self.sign_convention,
+                "known_at_reconstructed": self.known_at_reconstructed}
 
 
 class RealSourceAdapter:
@@ -162,10 +170,11 @@ class RealSourceAdapter:
         normalized_clock = None if normalized_value in (None, "") else _parse_datetime(normalized_value, "normalized_at")
         known_value = mapping.value(row, "known_at", default=None)
         known_at = None if known_value in (None, "") else _parse_datetime(known_value, "known_at")
+        reconstructed = False
         if self.config.known_at_policy == "require":
             if known_at is None or first_received_at is None or normalized_clock is None:
                 raise PITMetadataError("known_at, first_received_at, and normalized_at are required for forecasting")
-        else:
+        elif known_at is None:
             if publication_time is None:
                 raise PITMetadataError("publication_time is required for publication_plus_lag reconstruction")
             if first_received_at is None:
@@ -173,6 +182,11 @@ class RealSourceAdapter:
             if normalized_clock is None:
                 normalized_clock = first_received_at
             known_at = max(publication_time + self.config.publication_lag, first_received_at, normalized_clock)
+            reconstructed = True
+        # An available historical known_at is authoritative under the fallback
+        # policy. The publication rule is only allowed to fill that one gap.
+        if first_received_at is None or normalized_clock is None or known_at is None:
+            raise PITMetadataError("receipt and normalization clocks are required for forecasting")
         revision_id = mapping.value(row, "revision_id", default=self.config.revision_id_default)
         revision_sequence = mapping.value(row, "revision_sequence", default=self.config.revision_sequence_default)
         if revision_id is None or revision_sequence is None:
@@ -201,7 +215,7 @@ class RealSourceAdapter:
         metadata = RealRecordMetadata(source_id, country, domain, unit, issue_time, horizon,
                                       mapping.value(row, "target_name", default=None),
                                       mapping.value(row, "target_entity", default=None),
-                                      mapping.value(row, "sign_convention", default=None))
+                                      mapping.value(row, "sign_convention", default=None), reconstructed)
         return observation, metadata
 
     def adapt_rows(self, rows: Iterable[Mapping], *, normalized_at: datetime | None = None):

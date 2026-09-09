@@ -22,15 +22,21 @@ constants. No provider-specific column names are assumed.
 
 The default `known_at_policy` is `require`. It refuses rows without
 `known_at`, `first_received_at`, and `normalized_at`. A historical dataset may
-explicitly select `publication_plus_lag`; this requires `publication_time` and
-reconstructs `known_at` as the maximum of publication plus the configured lag,
-receipt, and normalization. The audit marks this as reconstructed. This is a
-controlled fallback, not a silent inference.
+explicitly select `publication_plus_lag`; when `known_at` is absent, this
+requires `publication_time` and reconstructs `known_at` as the maximum of
+publication plus the configured lag, receipt, and normalization. An available
+historical `known_at` remains authoritative. The audit marks reconstructed
+rows explicitly. This is a controlled fallback, not a silent inference.
 
 Source configuration also declares timezone, cadence, publication lag, horizon
 range, source metadata, and the dataset identity. The resulting observations
 are validated by the existing `Observation`, `SourceRegistry`, and
 `DatasetContract` contracts.
+
+For raw-byte evidence, pass an existing `RawStore` and an explicit
+`raw_received_at` to `load_real_dataset`. The loader stores the exact file
+bytes before adaptation and attaches that content digest to each observation;
+it never uses file modification time as a receipt clock.
 
 ## Supported files
 
@@ -42,9 +48,10 @@ dependency is installed automatically.
 ## Required preflight
 
 `audit_dataset` runs before any model execution and reports row count, date
-range, cadence, missingness, duplicate identities, revision frequency,
-timezone/DST review flags, unit consistency, gaps, suspicious future
-availability, stale periods, and availability at requested forecast horizons.
+range, cadence, missingness, duplicate identities, revision frequency and
+lineage, timezone/DST review flags, unit consistency, gaps, suspicious future
+availability, stale periods, source coverage, and availability at requested
+forecast horizons.
 
 The real runner refuses to proceed when PIT metadata, source forecast metadata,
 or the explicit target contract is unresolved. The audit also records whether
@@ -52,9 +59,10 @@ the publication-lag fallback was used.
 
 `audit_features` reports Pearson, Spearman, deterministic binned mutual
 information, fold-safe univariate OOF MAE, incremental OOF gain, fold
-stability, missingness, freshness, and registry leakage risk. Its decision is
-always `UNDECIDED`: correlation is diagnostic and cannot select features by
-itself.
+stability, missingness, freshness, and registry leakage risk. Its default
+decision is `UNDECIDED`. A caller may provide an explicit multi-signal
+`recommendation_policy` to produce KEEP/DROP recommendations; correlation is
+never sufficient for either decision.
 
 ## Baseline run
 

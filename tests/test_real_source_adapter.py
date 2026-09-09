@@ -51,6 +51,12 @@ class RealSourceAdapterTests(unittest.TestCase):
             row(KNOWN=None, RECEIVED=None, NORMALIZED=None))[0]
         self.assertEqual(adapted.known_at, T + timedelta(minutes=5))
 
+    def test_fallback_preserves_available_historical_known_at(self):
+        adapted, metadata = RealSourceAdapter(config("publication_plus_lag")).adapt_row(
+            row(KNOWN=(T + timedelta(minutes=1)).isoformat()))
+        self.assertEqual(adapted.known_at, T + timedelta(minutes=1))
+        self.assertFalse(metadata.known_at_reconstructed)
+
     def test_naive_clock_fails_closed(self):
         with self.assertRaises(ValueError):
             RealSourceAdapter(config()).adapt_row(row(EVENT="2026-01-01T00:00:00"))

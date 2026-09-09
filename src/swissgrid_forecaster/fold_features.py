@@ -67,10 +67,12 @@ class TimeTransform:
         if missingness_policy not in ('error', 'propagate'):
             raise ValueError('invalid missingness policy')
         self.name, self.window, self.missingness_policy = name, window, missingness_policy
+        nonempty(version, 'transform version')
         self.feature_version = identity([name, str(window), missingness_policy, version])
         self.artifact = None
 
     def fit(self, train_rows, cutoff):
+        self.artifact = None
         cutoff = utc(cutoff)
         rows = tuple(train_rows)
         if any(r.partition != 'train' or r.known_at > cutoff or r.event_time > cutoff for r in rows):

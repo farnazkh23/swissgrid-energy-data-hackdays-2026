@@ -113,3 +113,22 @@ class FeatureRegistry:
                 raise ValueError(f'missing feature/knowledge {key}')
             return max([utc(own_known_at[key])] + [resolve(p) for p in index[key].parent_features])
         return resolve(feature_id)
+
+    def topological_order(self) -> tuple[str, ...]:
+        """Parents precede children; ties are deterministic by feature ID."""
+        index = {f.feature_id: f for f in self.definitions}
+        result, visited = [], set()
+        def visit(key):
+            if key in visited:
+                return
+            for parent in sorted(index[key].parent_features):
+                visit(parent)
+            visited.add(key)
+            result.append(key)
+        for key in sorted(index):
+            visit(key)
+        return tuple(result)
+
+    @property
+    def manifest_hash(self) -> str:
+        return self.version

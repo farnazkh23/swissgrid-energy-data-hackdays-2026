@@ -86,7 +86,23 @@ def score_oof(oof: OOFResult) -> dict:
 
 def run_baselines(plan, rows, feature_manifest_hash, *, include_ridge=True) -> BaselineRun:
     factories, capabilities = baseline_factories(include_ridge=include_ridge)
-    oof = run_oof(plan, rows, factories, feature_manifest_hash)
+    results = []
+    for factory in factories:
+        model_id = factory().model_id
+        try:
+            result = run_oof(plan, rows, (factory,), feature_manifest_hash)
+            results.append(result)
+            capabilities[model_id]["eligible"] = True
+        except (ValueError, RuntimeError) as exc:
+            capabilities[model_id] = {"available": True, "eligible": False,
+                                      "reason": str(exc)}
+    if not results:
+        raise ValueError("no eligible baseline candidates produced complete OOF evidence")
+    first = results[0]
+    oof = OOFResult(plan, first.folds,
+                    tuple(record for result in results for record in result.records),
+                    feature_manifest_hash,
+                    tuple(identity for result in results for identity in result.candidate_identities))
     scoreboard = score_oof(oof)
     selected, _ = select_champion(oof, metric="mae")
     capabilities["selection"] = {"metric": "mae", "selected_model_id": selected[0],

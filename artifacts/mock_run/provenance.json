@@ -1,0 +1,68 @@
+{
+  "as_of_policy": "known_at <= issue_time; revisions resolved by highest eligible sequence; event_time <= issue_time for features",
+  "dataset_manifest_id": "4047137de847af9557a77a11255acfbd2588bb0bf2ae026da58357adfddba11a",
+  "fallback_abstention_state": {
+    "abstained": false,
+    "fallback_used": false,
+    "policy": "mock_baselines_only",
+    "reason": null
+  },
+  "feature_manifest_id": "08f78b5792ba41c6ad48a78cc8308410fd6ee672927c41fa7e1b8d1d8ba9d139",
+  "feature_quality_flags": {
+    "mock-cross_border_flow": {
+      "freshness_hours": 0.0,
+      "missing": false,
+      "observation_id": "r0",
+      "stale": false
+    },
+    "mock-hydro": {
+      "freshness_hours": 0.0,
+      "missing": false,
+      "observation_id": "r0",
+      "stale": false
+    },
+    "mock-load": {
+      "freshness_hours": 0.0,
+      "missing": false,
+      "observation_id": "r0",
+      "stale": false
+    },
+    "mock-net_position": {
+      "freshness_hours": 0.0,
+      "missing": false,
+      "observation_id": "r0",
+      "stale": false
+    },
+    "mock-solar": {
+      "freshness_hours": 0.0,
+      "missing": false,
+      "observation_id": "r0",
+      "stale": false
+    },
+    "mock-wind": {
+      "freshness_hours": 6.0,
+      "missing": false,
+      "observation_id": "r0",
+      "stale": true
+    }
+  },
+  "fit_cutoff": "2026-01-10T00:00:00+00:00",
+  "model_id": "seasonal_persistence",
+  "model_version": "213c84ff226cbefda9f3af3beb1c2e3e42a651642f015367ac28143c6930f277",
+  "oof": {
+    "folds": 3,
+    "holdout_used": false,
+    "oof_rows": 99,
+    "selection_metric": "mae"
+  },
+  "raw_evidence_receipts": 1340,
+  "source_ids": [
+    "mock-net_position",
+    "mock-load",
+    "mock-wind",
+    "mock-solar",
+    "mock-hydro",
+    "mock-cross_border_flow"
+  ],
+  "training_data_manifest_hash": "e69b7e5ca4d210603030fa7b10f48ff6b1912d38ef8aeab2f6860cd001cb5b3e"
+}

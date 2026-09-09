@@ -1,0 +1,23 @@
+{
+  "artifacts": [
+    "forecast.json",
+    "histogram.json",
+    "scoreboard.json",
+    "provenance.json",
+    "run_manifest.json"
+  ],
+  "historical_paths_written": [],
+  "holdout_used": false,
+  "horizon": "1:00:00",
+  "issue_time": "2026-01-10T00:00:00+00:00",
+  "schema_version": "mock-run.v1",
+  "seed": 20260909,
+  "source_ids": [
+    "mock-net_position",
+    "mock-load",
+    "mock-wind",
+    "mock-solar",
+    "mock-hydro",
+    "mock-cross_border_flow"
+  ]
+}

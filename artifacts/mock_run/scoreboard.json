@@ -1,0 +1,72 @@
+{
+  "candidates": {
+    "historical_conditional": {
+      "metrics": {
+        "bias": 8.386165840103159,
+        "brier_import": 0.0,
+        "coverage_p10_p90": 0.5757575757575758,
+        "coverage_p25_p75": 0.36363636363636365,
+        "mae": 8.797950827852997,
+        "pinball_p10": 1.5068992345454546,
+        "pinball_p50": 5.404518787878788,
+        "pinball_p90": 1.7754523672727267,
+        "rmse": 10.338207545996484,
+        "sharpness_p10_p90": 21.0645822,
+        "sharpness_p25_p75": 11.79167866666667
+      },
+      "model_id": "historical_conditional",
+      "model_version": "8dcf187b658216ea54a78b410993b0ad8532276ed5b2bb0c2be4f09739d76e02",
+      "oof_rows": 33,
+      "scored_from": "rolling_oof_predictions_only"
+    },
+    "persistence": {
+      "metrics": {
+        "bias": 12.24050393939394,
+        "mae": 12.49792709090909,
+        "rmse": 14.347525774318909
+      },
+      "model_id": "persistence",
+      "model_version": "6b13c449decec9d79877c9044ca01b9ff5e08b9037d0f827ce04a1f1a665b4f8",
+      "oof_rows": 33,
+      "scored_from": "rolling_oof_predictions_only"
+    },
+    "seasonal_persistence": {
+      "metrics": {
+        "bias": 1.3984659393939394,
+        "mae": 3.530809454545455,
+        "rmse": 4.514912088395601
+      },
+      "model_id": "seasonal_persistence",
+      "model_version": "213c84ff226cbefda9f3af3beb1c2e3e42a651642f015367ac28143c6930f277",
+      "oof_rows": 33,
+      "scored_from": "rolling_oof_predictions_only"
+    }
+  },
+  "capabilities": {
+    "historical_conditional": {
+      "available": true,
+      "reason": null
+    },
+    "persistence": {
+      "available": true,
+      "reason": null
+    },
+    "ridge": {
+      "available": false,
+      "reason": "scikit-learn unavailable"
+    },
+    "seasonal_persistence": {
+      "available": true,
+      "reason": null
+    },
+    "selection": {
+      "metric": "mae",
+      "selected_model_id": "seasonal_persistence",
+      "selected_model_version": "213c84ff226cbefda9f3af3beb1c2e3e42a651642f015367ac28143c6930f277"
+    }
+  },
+  "selected_model": [
+    "seasonal_persistence",
+    "213c84ff226cbefda9f3af3beb1c2e3e42a651642f015367ac28143c6930f277"
+  ]
+}

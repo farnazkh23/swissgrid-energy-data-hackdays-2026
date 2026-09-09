@@ -1,0 +1,90 @@
+{
+  "fallback_abstention_state": {
+    "abstained": false,
+    "fallback_used": false,
+    "policy": "mock_baselines_only",
+    "reason": null
+  },
+  "forecast_id": "15f286c5b75a1ee8823d4982b632c34f21f9883a0c312304daf0b420b02cba0f",
+  "horizon": "1:00:00",
+  "issue_time": "2026-01-10T00:00:00+00:00",
+  "model": {
+    "feature_manifest_hash": "08f78b5792ba41c6ad48a78cc8308410fd6ee672927c41fa7e1b8d1d8ba9d139",
+    "fit_cutoff": "2026-01-10T00:00:00+00:00",
+    "selected_model_id": "seasonal_persistence",
+    "selected_model_version": "213c84ff226cbefda9f3af3beb1c2e3e42a651642f015367ac28143c6930f277",
+    "training_data_manifest_hash": "e69b7e5ca4d210603030fa7b10f48ff6b1912d38ef8aeab2f6860cd001cb5b3e"
+  },
+  "probability_export": 1.0,
+  "probability_import": 0.0,
+  "provenance": {
+    "dataset_manifest_id": "4047137de847af9557a77a11255acfbd2588bb0bf2ae026da58357adfddba11a",
+    "feature_manifest_id": "08f78b5792ba41c6ad48a78cc8308410fd6ee672927c41fa7e1b8d1d8ba9d139",
+    "fold_evaluation_summary": {
+      "folds": 3,
+      "holdout_used": false,
+      "oof_rows": 99,
+      "selection_metric": "mae"
+    },
+    "source_ids": [
+      "mock-net_position",
+      "mock-load",
+      "mock-wind",
+      "mock-solar",
+      "mock-hydro",
+      "mock-cross_border_flow"
+    ]
+  },
+  "quantiles": {
+    "p10": -54.92354039999999,
+    "p25": -52.89621399999999,
+    "p50": -47.992912,
+    "p75": -46.371958,
+    "p90": -43.4288392,
+    "quantile_repair_applied": false
+  },
+  "samples": [
+    -49.068830999999996,
+    -42.898070000000004,
+    -47.592812,
+    -50.181219000000006,
+    -48.960708000000004,
+    -42.06706499999999,
+    -55.055257999999995,
+    -44.396023,
+    -50.082184000000005,
+    -54.145951000000004,
+    -47.554355,
+    -53.32576,
+    -45.428894,
+    -46.8283,
+    -54.141213,
+    -47.992912,
+    -44.310048,
+    -41.628749,
+    -50.900563999999996,
+    -45.733329,
+    -52.89621399999999,
+    -50.421917,
+    -46.721258,
+    -54.39667,
+    -47.914643,
+    -46.371958,
+    -55.960626,
+    -48.786484,
+    -58.255199000000005,
+    -46.679030000000004,
+    -55.473208,
+    -43.208537,
+    -47.25759
+  ],
+  "sign_convention": "positive=import; negative=export",
+  "target_entity": "CH",
+  "target_name": "net_position",
+  "target_time": "2026-01-10T01:00:00+00:00",
+  "unit": "MW",
+  "warnings": [
+    "synthetic mock data; results have no predictive relevance claim",
+    "stale source observations were retained and flagged"
+  ]
+}

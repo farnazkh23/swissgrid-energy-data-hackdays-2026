@@ -1,0 +1,74 @@
+[
+  {
+    "assumption": "delivery-hour local date; known at 12:00 Europe/Paris on preceding day",
+    "dataset": "01_CORE_HISTORICAL/LSEG_PRICES/FR_DAY_AHEAD_HOURLY_AND_15M.xlsx",
+    "family": "fr_it_prices",
+    "pit": "reconstructable",
+    "status": "selected"
+  },
+  {
+    "assumption": "delivery-hour local date; known at 12:00 Europe/Paris on preceding day",
+    "dataset": "01_CORE_HISTORICAL/LSEG_PRICES/IT_DAY_AHEAD_HOURLY_AND_15M.xlsx",
+    "family": "fr_it_prices",
+    "pit": "reconstructable",
+    "status": "selected"
+  },
+  {
+    "assumption": "known at valid timestamp",
+    "dataset": "01_CORE_HISTORICAL/LSEG_DEMAND/IT_DEMAND_HOURLY_2021_2025.xlsx",
+    "family": "italy_demand",
+    "pit": "causal observed value",
+    "status": "selected"
+  },
+  {
+    "assumption": "issue_time_utc is publication clock",
+    "dataset": "01_CORE_HISTORICAL/FR_NUCLEAR_PIT/EDF_NUCLEAR_PIT_DAILY_2021_2026.csv",
+    "family": "fr_nuclear_pit",
+    "pit": "strong",
+    "status": "selected"
+  },
+  {
+    "assumption": "publication_time_utc and revision lineage retained",
+    "dataset": "01_CORE_HISTORICAL/FR_NUCLEAR_PIT/EDF_NUCLEAR_OUTAGE_REVISIONS_PIT.csv",
+    "family": "fr_nuclear_pit",
+    "pit": "strong",
+    "status": "selected"
+  },
+  {
+    "assumption": "published is known_at; text intervals are not interpreted",
+    "dataset": "02_SOURCE_RAW/FR_NUCLEAR/EDF_TRANSPARENCY_REMIT_MESSAGES_RAW.csv",
+    "family": "edf_remit_events",
+    "pit": "reconstructable publication clock",
+    "status": "selected"
+  },
+  {
+    "family": "weather",
+    "reason": "current/recent exports lack historical PIT vintages",
+    "status": "rejected"
+  },
+  {
+    "family": "residual_load",
+    "reason": "current/recent exports lack reconstructable issue clocks",
+    "status": "rejected"
+  },
+  {
+    "family": "CH_DE_prices",
+    "reason": "not part of the selected complete FR/IT historical panel",
+    "status": "rejected"
+  },
+  {
+    "family": "outage_history_raw",
+    "reason": "raw history lacks the revision-as-of contract used by V1",
+    "status": "rejected"
+  },
+  {
+    "family": "cross_border_screenshots",
+    "reason": "visual/reference only; no reliable row-level series",
+    "status": "rejected"
+  },
+  {
+    "family": "cost_curves",
+    "reason": "current snapshots, not historical PIT vintages",
+    "status": "rejected"
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "feature_families": [
+    "fr_it_prices",
+    "italy_demand",
+    "fr_nuclear_pit",
+    "edf_remit_events"
+  ],
+  "pit_policy": "known_at <= issue_time; future-valid values without publication clocks excluded",
+  "raw_lseg_copied": false,
+  "raw_lseg_path": "/home/farnaz/swissgrid-forecaster/data/lseg/raw",
+  "raw_lseg_used": true,
+  "source_tables": [
+    "edh.input.cross_border_exchanges",
+    "edh.input.ntc_month"
+  ]
+}

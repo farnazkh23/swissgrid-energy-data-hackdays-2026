@@ -1,0 +1,17 @@
+{
+  "deterministic_seed": 20260910,
+  "lseg_series_nonempty": {
+    "lseg_fr_da_price": 41582,
+    "lseg_it_da_price": 41582,
+    "lseg_it_demand": 41557
+  },
+  "models": [
+    "seasonal_persistence",
+    "ridge",
+    "hist_gradient_boosting"
+  ],
+  "official_scorer_invoked": false,
+  "official_scorer_reason": "Databricks scorer namespace is not available locally",
+  "sample_count": 300,
+  "tree_engine": "dependency-free histogram gradient boosting; sklearn unavailable"
+}

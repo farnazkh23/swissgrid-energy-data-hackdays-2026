@@ -16,27 +16,41 @@ class IntegrityError(ValueError):
     """Persisted evidence differs from its claimed identity."""
 
 
+def _fsync_directory(directory: Path) -> None:
+    """Best-effort; Windows has no directory file descriptor to fsync."""
+    if not hasattr(os, "O_DIRECTORY"):
+        return
+    handle = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(handle)
+    finally:
+        os.close(handle)
+
+
 def _publish(path: Path, payload: bytes) -> bool:
     """fsync temp bytes then atomically link without replacing existing files."""
-    fd, temporary = tempfile.mkstemp(prefix=".pending-", dir=path.parent)
+    fd, temporary_name = tempfile.mkstemp(prefix=".pending-", dir=path.parent)
+    temporary = Path(temporary_name)
+    created = False
     try:
         with os.fdopen(fd, "wb") as stream:
             stream.write(payload)
             stream.flush()
-            os.fchmod(stream.fileno(), 0o444)
             os.fsync(stream.fileno())
         try:
             os.link(temporary, path)
+            created = True
         except FileExistsError:
-            return False
-        return True
+            created = False
+        return created
     finally:
+        # Unlink the still-writable temp name first: hard links share one set of
+        # attributes, so marking `path` read-only before this would block the
+        # unlink on Windows.
         os.unlink(temporary)
-        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+        if created:
+            os.chmod(path, 0o444)
+        _fsync_directory(path.parent)
 
 
 @dataclass(frozen=True, slots=True)

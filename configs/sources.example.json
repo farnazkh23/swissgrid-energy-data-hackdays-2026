@@ -1,0 +1,13 @@
+{
+  "dataset_id": "REPLACE_WITH_DATASET_ID",
+  "provider": "REPLACE_WITH_PROVIDER",
+  "country": "REPLACE_WITH_COUNTRY",
+  "domain": "net_position",
+  "timezone": "Europe/Zurich",
+  "update_cadence": 3600,
+  "publication_lag": 0,
+  "revision_policy": "REPLACE_WITH_DOCUMENTED_REVISION_POLICY",
+  "known_at_policy": "require",
+  "horizon": {"minimum": 3600, "maximum": 86400},
+  "source_manifests": [{"source_id": "REPLACE_WITH_SOURCE_ID", "provider": "REPLACE_WITH_PROVIDER", "country": "REPLACE_WITH_COUNTRY", "domain": "net_position", "unit": "REPLACE_WITH_UNIT"}]
+}

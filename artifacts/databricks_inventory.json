@@ -1,0 +1,343 @@
+{
+  "inventory_as_of": "2026-09-10",
+  "scope": "Energy Data Hackdays / Swissgrid EDH 2026 challenge resources visible to the authenticated Databricks user",
+  "read_only": true,
+  "methods": [
+    "Databricks CLI v1.16.0 workspace, Unity Catalog, compute, SQL, MLflow, jobs, pipelines, serving and filesystem list/get APIs",
+    "One bounded SELECT current_date()",
+    "One bounded aggregate SELECT across edh.input tables for row counts, timestamps, area values, null counts and duplicate keys",
+    "One bounded timestamp-difference aggregate across edh.input tables for observed cadence"
+  ],
+  "limitations": [
+    "No Databricks MCP connector was available; CLI network access required an environment-level read-only network allowance.",
+    "No raw rows were exported. No full-table value profiling beyond the stated aggregates was performed.",
+    "Issue/publication/revision timing semantics are not present in the visible table schemas; labels such as current/day_ahead/intraday were not interpreted as timestamps.",
+    "The SQL aggregate row counts are treated as observed counts at query time. Some catalog predictive-analyze numRows values were stale and are retained separately.",
+    "Private or unrelated user folders under /Users were not recursively inspected. GOTTI/BELA/DHAM were not modified or queried."
+  ],
+  "workspace": {
+    "top_level_visible": ["/github", "/Users", "/Shared", "/Repos"],
+    "challenge_relevant_roots": [
+      {"path": "/github/dp-light-edh", "type": "Git folder", "note": "Current cloned GitHub repository visible in workspace"},
+      {"path": "/Shared/dp-light-edh", "type": "Git folder", "note": "Shared clone; older/sparser source listing than /github"},
+      {"path": "/Shared/.bundle/eval26/edh", "type": "deployed bundle files/state", "note": "Submission-evaluation job bundle"},
+      {"path": "/Shared/.bundle/eval26-dashboards/edh", "type": "deployed bundle files/state", "note": "Dashboard-related bundle state; no dashboard object was exposed by the inspected path"}
+    ],
+    "repos_api": {"count": 0, "note": "Repos API returned no repos; Workspace API exposes the two Git folders above. The CLI notes that Git-CLI-enabled repos may be absent from the Repos API."},
+    "notebooks": [
+      {"path": "/github/dp-light-edh/src/edh2026/evaluate_submission", "language": "PYTHON", "relevance": "Official submission evaluator notebook"}
+    ],
+    "challenge_files": [
+      "/github/dp-light-edh/.gitignore",
+      "/github/dp-light-edh/.pre-commit-config.yaml",
+      "/github/dp-light-edh/README.md",
+      "/github/dp-light-edh/SUPPORT.md",
+      "/github/dp-light-edh/__init__.py",
+      "/github/dp-light-edh/pyproject.toml",
+      "/github/dp-light-edh/requirements.txt",
+      "/github/dp-light-edh/src/__init__.py",
+      "/github/dp-light-edh/src/edh2026/README.md",
+      "/github/dp-light-edh/src/edh2026/INPUT_DATA.md",
+      "/github/dp-light-edh/src/edh2026/trigger_submission.py",
+      "/github/dp-light-edh/src/edh2026/local_scoring.py",
+      "/github/dp-light-edh/src/edh2026/img/distribution_samples.png",
+      "/github/dp-light-edh/src/edh2026/img/evaluation_factors.png",
+      "/github/dp-light-edh/src/edh2026/img/scoring_average.png",
+      "/Shared/dp-light-edh/.gitignore",
+      "/Shared/dp-light-edh/.pre-commit-config.yaml",
+      "/Shared/dp-light-edh/README.md",
+      "/Shared/dp-light-edh/SUPPORT.md",
+      "/Shared/dp-light-edh/databricks.yml",
+      "/Shared/dp-light-edh/pyproject.toml",
+      "/Shared/dp-light-edh/requirements.txt",
+      "/Shared/dp-light-edh/src/edh2026/README.md",
+      "/Shared/dp-light-edh/src/edh2026/trigger_submission.py"
+    ],
+    "bundle_files": [
+      "/Shared/.bundle/eval26/edh/files/jobs.yml",
+      "/Shared/.bundle/eval26/edh/files/databricks.yml",
+      "/Shared/.bundle/eval26/edh/state/deployment.json",
+      "/Shared/.bundle/eval26/edh/state/resources.json",
+      "/Shared/.bundle/eval26/edh/state/metadata.json",
+      "/Shared/.bundle/eval26-dashboards/edh/files/jobs.yml",
+      "/Shared/.bundle/eval26-dashboards/edh/files/databricks.yml",
+      "/Shared/.bundle/eval26-dashboards/edh/state/deployment.json",
+      "/Shared/.bundle/eval26-dashboards/edh/state/resources.json",
+      "/Shared/.bundle/eval26-dashboards/edh/state/metadata.json"
+    ]
+  },
+  "unity_catalog": {
+    "catalogs_visible": [
+      {"name": "edh", "type": "MANAGED_CATALOG", "schemas": ["input", "group_0"], "challenge_relevant": true},
+      {"name": "system", "type": "SYSTEM_CATALOG", "schemas": ["ai", "information_schema"], "challenge_relevant": false},
+      {"name": "samples", "type": "SYSTEM_CATALOG", "schemas": ["accuweather", "bakehouse", "clickbench", "databricks", "healthverity", "information_schema", "nyctaxi", "sec", "tpcds_sf1", "tpcds_sf10", "tpcds_sf100", "tpcds_sf1000", "tpch", "tpch_sf1", "tpch_sf10", "tpch_sf100", "tpch_sf1000", "wanderbricks"], "challenge_relevant": false}
+    ],
+    "edh_tables": "All 21 visible tables are managed Delta tables in edh.input. edh.group_0 returned no tables.",
+    "volumes": [
+      {"full_name": "edh.input.data", "type": "MANAGED", "top_level_entries": ["cross_border_exchanges.csv", "net_positions.csv", "ntc_month.csv", "generation_forecast/"], "generation_forecast_countries": ["AT", "CH", "DE", "FR", "IT"], "raw_file_count_observed": 147, "generation_forecast_csv_slices_per_directory": 8, "generation_forecast_directory_names": {"AT": ["AT_ONSHORE_WIND_GENERATION_FORECAST", "AT_SOLAR_GENERATION_FORECAST", "AT_TOTAL_GENERATION_FORECAST"], "CH": ["CH_ONSHORE_WIND_GENERATION_FORECAST", "CH_SOLAR_GENERATION_FORECAST", "CH_TOTAL_GENERATION_FORECAST"], "DE": ["DE_OFFSHORE_WIND_GENERATION_FORECAST", "DE_ONSHORE_WIND_GENERATION_FOREACAST", "DE_SOLAR_GENERATION_FORECAST", "DE_TOTAL_GENERATION_FORECAST"], "FR": ["FR_OFFSHORE_GENERATION_FORECAST", "FR_ONSHORE_WIND_GENERATION_FORECAST", "FR_SOLAR_GENERATION_FORECAST", "FR_TOTAL_GENERATION_FORECAST"], "IT": ["IT_OFFSHORE_WIND_GENERATION_FORECAST", "IT_ONSHORE_WIND_GENERATION_FORECAST", "IT_SOLAR_GENERATION_FORECAST", "IT_TOTAL_GENERATION_FORECAST"]}, "raw_file_pattern": "Yearly GUI_*_GENERATION_FORECAST_*.csv slices; IT total includes a final 202601010000-202701010000 slice and one visible filename with (1)."},
+      {"full_name": "edh.group_0.data", "type": "MANAGED", "top_level_entries": [], "note": "Empty at inspection time"}
+    ]
+  },
+  "datasets": [
+    {
+      "full_name": "edh.input.cross_border_exchanges",
+      "category": "cross_border_exchanges",
+      "country_or_zone_coverage": ["AT-CH", "AT-IT", "CH-DE", "CH-IT", "DE-AT", "FR-CH", "FR-DE", "FR-IT"],
+      "schema": [{"name": "Zeitstempel", "type": "timestamp", "nullable": true}, {"name": "AT-CH", "type": "double", "nullable": true}, {"name": "AT-IT", "type": "double", "nullable": true}, {"name": "CH-DE", "type": "double", "nullable": true}, {"name": "CH-IT", "type": "double", "nullable": true}, {"name": "DE-AT", "type": "double", "nullable": true}, {"name": "FR-CH", "type": "double", "nullable": true}, {"name": "FR-DE", "type": "double", "nullable": true}, {"name": "FR-IT", "type": "double", "nullable": true}],
+      "row_count_sql": 284092,
+      "catalog_metadata_numRows": 284092,
+      "temporal": {"timestamp_field": "Zeitstempel", "min": "2019-01-01T00:00:00Z", "max": "2026-08-20T23:45:00Z", "distinct_timestamps": 267712, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 900, "max": 4500, "non_15m_steps": 8}},
+      "units": "Not declared in the table schema or INPUT_DATA.md; commercial-flow values are not assumed to be MW.",
+      "issue_time_fields": [], "valid_time_fields": ["Zeitstempel"], "publication_timestamp_fields": [], "revision_version_fields": [],
+      "missingness_null_counts": {"Zeitstempel": 0, "AT-CH": 0, "AT-IT": 0, "CH-DE": 0, "CH-IT": 0, "DE-AT": 0, "FR-CH": 0, "FR-DE": 0, "FR-IT": 0},
+      "duplicate_key_rows": 16380,
+      "pit_suitability": "CURRENT_ONLY",
+      "pit_basis": "Observed commercial-flow timestamp only; no issue/publication/revision dimension."
+    },
+    {
+      "full_name": "edh.input.net_positions",
+      "category": "net_positions",
+      "country_or_zone_coverage": ["AT", "CH", "DE", "FR", "IT"],
+      "schema": [{"name": "Zeitstempel", "type": "timestamp", "nullable": true}, {"name": "AT", "type": "double", "nullable": true}, {"name": "CH", "type": "double", "nullable": true}, {"name": "DE", "type": "double", "nullable": true}, {"name": "FR", "type": "double", "nullable": true}, {"name": "IT", "type": "double", "nullable": true}],
+      "row_count_sql": 271803,
+      "catalog_metadata_numRows": 271803,
+      "temporal": {"timestamp_field": "Zeitstempel", "min": "2019-01-01T00:15:00Z", "max": "2026-08-20T23:45:00Z", "distinct_timestamps": 267711, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 900, "max": 4500, "non_15m_steps": 8}},
+      "units": "Not declared in the table schema or INPUT_DATA.md; net-position values are not assumed to be MW.",
+      "issue_time_fields": [], "valid_time_fields": ["Zeitstempel"], "publication_timestamp_fields": [], "revision_version_fields": [],
+      "missingness_null_counts": {"Zeitstempel": 0, "AT": 0, "CH": 0, "DE": 0, "FR": 0, "IT": 0},
+      "duplicate_key_rows": 4092,
+      "pit_suitability": "CURRENT_ONLY",
+      "pit_basis": "Observed/netted position timestamp only; no issue/publication/revision dimension."
+    },
+    {
+      "full_name": "edh.input.ntc_month",
+      "category": "NTC / transmission capacity",
+      "country_or_zone_coverage": ["CH-AT", "AT-CH", "CH-DE", "DE-CH", "CH-FR", "FR-CH", "CH-IT", "IT-CH"],
+      "schema": [{"name": "Zeitstempel", "type": "timestamp", "nullable": true}, {"name": "CH_AT__MW_", "type": "double", "nullable": true}, {"name": "AT_CH__MW_", "type": "double", "nullable": true}, {"name": "CH_DE__MW_", "type": "double", "nullable": true}, {"name": "DE_CH__MW_", "type": "double", "nullable": true}, {"name": "CH_FR__MW_", "type": "double", "nullable": true}, {"name": "FR_CH__MW_", "type": "double", "nullable": true}, {"name": "CH_IT__MW_", "type": "double", "nullable": true}, {"name": "IT_CH__MW_", "type": "double", "nullable": true}],
+      "row_count_sql": 67103,
+      "catalog_metadata_numRows": 67103,
+      "temporal": {"timestamp_field": "Zeitstempel", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:00:00Z", "distinct_timestamps": 67096, "observed_step_seconds": {"min": 3600, "p10": 3600, "p50": 3600, "p90": 3600, "max": 7200, "non_15m_steps": 67095}},
+      "units": "MW indicated by column names.",
+      "issue_time_fields": [], "valid_time_fields": ["Zeitstempel"], "publication_timestamp_fields": [], "revision_version_fields": [],
+      "missingness_null_counts": {"Zeitstempel": 0, "CH_AT__MW_": 0, "AT_CH__MW_": 0, "CH_DE__MW_": 0, "DE_CH__MW_": 0, "CH_FR__MW_": 0, "FR_CH__MW_": 0, "CH_IT__MW_": 0, "IT_CH__MW_": 0},
+      "duplicate_key_rows": 7,
+      "pit_suitability": "PIT_WEAK",
+      "pit_basis": "Month-ahead capacity concept is documented, but no issue/publication/revision timestamp is available."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_at_onshore_wind",
+      "category": "generation forecast / actual / wind onshore",
+      "country": "AT", "area_values": ["Austria (AT)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 268340, "catalog_metadata_numRows": 280512,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 268340, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 900, "max": 6300, "non_15m_steps": 15}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"],
+      "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 673, "current": 0, "day_ahead": 0, "intraday": 0}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_at_solar",
+      "category": "generation forecast / actual / solar", "country": "AT", "area_values": ["Austria (AT)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 268340, "catalog_metadata_numRows": 280512,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 268340, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 900, "max": 6300, "non_15m_steps": 15}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 673, "current": 0, "day_ahead": 0, "intraday": 0}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_at_total",
+      "category": "generation forecast / actual / total", "country": "AT", "area_values": ["Austria (AT)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual_generation", "type": "double", "nullable": true}, {"name": "generation_forecast", "type": "double", "nullable": true}, {"name": "scheduled_consumption", "type": "double", "nullable": true}],
+      "row_count_sql": 84278, "catalog_metadata_numRows": 96408,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 84278, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 3600, "p90": 3600, "max": 14400, "non_15m_steps": 61341}},
+      "units": "MW per generation family documentation; scheduled_consumption semantics are not separately documented.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["generation_forecast"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual_generation": 673, "generation_forecast": 0, "scheduled_consumption": 0}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Forecast field exists without issue/publication/revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_ch_onshore_wind",
+      "category": "generation forecast / actual / wind onshore", "country": "CH", "area_values": ["Switzerland (CH)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 67073, "catalog_metadata_numRows": 70128,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:00:00Z", "distinct_timestamps": 67073, "observed_step_seconds": {"min": 3600, "p10": 3600, "p50": 3600, "p90": 3600, "max": 14400, "non_15m_steps": 67072}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 168, "current": 67073, "day_ahead": 3, "intraday": 54743}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_ch_solar",
+      "category": "generation forecast / actual / solar", "country": "CH", "area_values": ["Switzerland (CH)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 67073, "catalog_metadata_numRows": 70128,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:00:00Z", "distinct_timestamps": 67073, "observed_step_seconds": {"min": 3600, "p10": 3600, "p50": 3600, "p90": 3600, "max": 14400, "non_15m_steps": 67072}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 168, "current": 67073, "day_ahead": 3, "intraday": 54743}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_ch_total",
+      "category": "generation forecast / actual / total", "country": "CH", "area_values": ["Switzerland (CH)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual_generation", "type": "double", "nullable": true}, {"name": "generation_forecast", "type": "double", "nullable": true}, {"name": "scheduled_consumption", "type": "double", "nullable": true}],
+      "row_count_sql": 67073, "catalog_metadata_numRows": 70128,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:00:00Z", "distinct_timestamps": 67073, "observed_step_seconds": {"min": 3600, "p10": 3600, "p50": 3600, "p90": 3600, "max": 14400, "non_15m_steps": 67072}},
+      "units": "MW per generation family documentation; scheduled_consumption semantics are not separately documented.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["generation_forecast"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual_generation": 168, "generation_forecast": 0, "scheduled_consumption": 67073}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Forecast field exists without issue/publication/revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_de_offshore_wind",
+      "category": "generation forecast / actual / wind offshore", "country": "DE", "area_values": ["Germany (DE)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 268340, "catalog_metadata_numRows": 280512,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 268340, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 900, "max": 6300, "non_15m_steps": 15}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 673, "current": 0, "day_ahead": 0, "intraday": 0}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_de_onshore_wind",
+      "category": "generation forecast / actual / wind onshore", "country": "DE", "area_values": ["Germany (DE)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 268340, "catalog_metadata_numRows": 280512,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 268340, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 900, "max": 6300, "non_15m_steps": 15}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 673, "current": 192, "day_ahead": 0, "intraday": 0}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_de_solar",
+      "category": "generation forecast / actual / solar", "country": "DE", "area_values": ["Germany (DE)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 268340, "catalog_metadata_numRows": 280512,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 268340, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 900, "max": 6300, "non_15m_steps": 15}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 673, "current": 288, "day_ahead": 0, "intraday": 0}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_de_total",
+      "category": "generation forecast / actual / total", "country": "DE", "area_values": ["Germany (DE)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual_generation", "type": "double", "nullable": true}, {"name": "generation_forecast", "type": "double", "nullable": true}, {"name": "scheduled_consumption", "type": "double", "nullable": true}],
+      "row_count_sql": 110552, "catalog_metadata_numRows": 122688,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 110552, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 3600, "max": 14400, "non_15m_steps": 52587}},
+      "units": "MW per generation family documentation; scheduled_consumption semantics are not separately documented.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["generation_forecast"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual_generation": 673, "generation_forecast": 0, "scheduled_consumption": 110552}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Forecast field exists without issue/publication/revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_fr_offshore_wind",
+      "category": "generation forecast / actual / wind offshore", "country": "FR", "area_values": ["France (FR)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 67073, "catalog_metadata_numRows": 70128,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:00:00Z", "distinct_timestamps": 67073, "observed_step_seconds": {"min": 3600, "p10": 3600, "p50": 3600, "p90": 3600, "max": 14400, "non_15m_steps": 67072}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 39477, "current": 40261, "day_ahead": 40277, "intraday": 40268}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_fr_onshore_wind",
+      "category": "generation forecast / actual / wind onshore", "country": "FR", "area_values": ["France (FR)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 67073, "catalog_metadata_numRows": 70128,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:00:00Z", "distinct_timestamps": 67073, "observed_step_seconds": {"min": 3600, "p10": 3600, "p50": 3600, "p90": 3600, "max": 14400, "non_15m_steps": 67072}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 215, "current": 102, "day_ahead": 348, "intraday": 8397}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_fr_solar",
+      "category": "generation forecast / actual / solar", "country": "FR", "area_values": ["France (FR)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 67073, "catalog_metadata_numRows": 70128,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:00:00Z", "distinct_timestamps": 67073, "observed_step_seconds": {"min": 3600, "p10": 3600, "p50": 3600, "p90": 3600, "max": 14400, "non_15m_steps": 67072}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 205, "current": 144, "day_ahead": 370, "intraday": 8632}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_fr_total",
+      "category": "generation forecast / actual / total", "country": "FR", "area_values": ["France (FR)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual_generation", "type": "double", "nullable": true}, {"name": "generation_forecast", "type": "double", "nullable": true}, {"name": "scheduled_consumption", "type": "double", "nullable": true}],
+      "row_count_sql": 84278, "catalog_metadata_numRows": 96408,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 84278, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 3600, "p90": 3600, "max": 14400, "non_15m_steps": 61341}},
+      "units": "MW per generation family documentation; scheduled_consumption semantics are not separately documented.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["generation_forecast"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual_generation": 786, "generation_forecast": 218, "scheduled_consumption": 84278}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Forecast field exists without issue/publication/revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_it_offshore_wind",
+      "category": "generation forecast / actual / wind offshore", "country": "IT", "area_values": ["Italy (IT)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 110552, "catalog_metadata_numRows": 122688,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 110552, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 3600, "max": 14400, "non_15m_steps": 52587}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 30466, "current": 110552, "day_ahead": 110552, "intraday": 110552}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_it_onshore_wind",
+      "category": "generation forecast / actual / wind onshore", "country": "IT", "area_values": ["Italy (IT)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 110552, "catalog_metadata_numRows": 122688,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 110552, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 3600, "max": 14400, "non_15m_steps": 52587}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 760, "current": 17810, "day_ahead": 17586, "intraday": 26562}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_it_solar",
+      "category": "generation forecast / actual / solar", "country": "IT", "area_values": ["Italy (IT)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual", "type": "double", "nullable": true}, {"name": "current", "type": "double", "nullable": true}, {"name": "day_ahead", "type": "double", "nullable": true}, {"name": "intraday", "type": "double", "nullable": true}],
+      "row_count_sql": 110552, "catalog_metadata_numRows": 122688,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 110552, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 3600, "max": 14400, "non_15m_steps": 52587}},
+      "units": "MW per INPUT_DATA.md.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["current", "day_ahead", "intraday"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual": 676, "current": 356, "day_ahead": 1562, "intraday": 24091}, "duplicate_key_rows": 0, "pit_suitability": "PIT_WEAK", "pit_basis": "Vintage-like value columns exist, but no issue/publication timestamps or documented revision timing."
+    },
+    {
+      "full_name": "edh.input.generation_forecast_it_total",
+      "category": "generation forecast / actual / total", "country": "IT", "area_values": ["Italy (IT)"],
+      "schema": [{"name": "mtu_start", "type": "timestamp", "nullable": true}, {"name": "mtu_end", "type": "timestamp", "nullable": true}, {"name": "area", "type": "string", "nullable": true}, {"name": "actual_generation", "type": "double", "nullable": true}, {"name": "generation_forecast", "type": "double", "nullable": true}, {"name": "scheduled_consumption", "type": "double", "nullable": true}],
+      "row_count_sql": 124740, "catalog_metadata_numRows": 148968,
+      "temporal": {"timestamp_field": "mtu_start", "valid_interval_end": "mtu_end", "min": "2019-01-01T00:00:00Z", "max": "2026-08-27T23:45:00Z", "distinct_timestamps": 101802, "observed_step_seconds": {"min": 900, "p10": 900, "p50": 900, "p90": 3600, "max": 31539600, "non_15m_steps": 43830}},
+      "units": "MW per generation family documentation; scheduled_consumption semantics are not separately documented.", "issue_time_fields": [], "valid_time_fields": ["mtu_start", "mtu_end"], "publication_timestamp_fields": [], "revision_version_fields": [], "vintage_like_fields": ["generation_forecast"], "missingness_null_counts": {"mtu_start": 0, "mtu_end": 15, "area": 0, "actual_generation": 1346, "generation_forecast": 364, "scheduled_consumption": 124740}, "duplicate_key_rows": 22938, "pit_suitability": "PIT_WEAK", "pit_basis": "Forecast field exists without issue/publication/revision timing; duplicate keys need resolution before training."
+    }
+  ],
+  "compute": {
+    "clusters": [
+      {"name": "group-0-cluster", "cluster_id": "0715-141840-gq64eoq4", "state": "RUNNING", "cpu_or_gpu": "CPU", "runtime": "16.4.x-scala2.12", "node_type": "Standard_D8s_v3", "workers": 1, "cores": 16, "memory_mb": 65536, "data_security_mode": "USER_ISOLATION", "autotermination_minutes": 1440},
+      {"name": "group-0-gpu-cluster", "cluster_id": "0715-141840-dppn5k0s", "state": "RUNNING", "cpu_or_gpu": "GPU", "runtime": "16.4.x-gpu-ml-scala2.12", "node_type": "Standard_NV36ads_A10_v5", "workers": 0, "cores": 36, "memory_mb": 450560, "data_security_mode": "SINGLE_USER", "autotermination_minutes": 1440}
+    ],
+    "cluster_policies_visible": [],
+    "instance_pools_visible": [],
+    "serverless": "Available on the inspected SQL warehouse (enable_serverless_compute=true). No compute was started or resized."
+  },
+  "sql_warehouses": [
+    {"name": "Serverless Starter Warehouse", "id": "c62f5bce0e9a3f5d", "state": "RUNNING", "size": "Small", "type": "PRO", "photon": true, "serverless_compute": true, "min_clusters": 1, "max_clusters": 1, "auto_stop_minutes": 10, "health": "HEALTHY"}
+  ],
+  "ai_ml": {
+    "mlflow_experiments_visible": [],
+    "legacy_registered_models_visible": [],
+    "challenge_catalog_registered_models_visible": [],
+    "feature_store": "No feature-store tables endpoint was available to the CLI/API probe; no feature tables were visible in edh.input.",
+    "serving_endpoints": {"challenge_specific": [], "visible_foundation_model_endpoints": "Databricks-managed foundation-model endpoints only; none are Swissgrid forecasting models."},
+    "relevant_notebooks": ["/github/dp-light-edh/src/edh2026/evaluate_submission"]
+  },
+  "jobs_pipelines": {
+    "jobs": [
+      {"name": "edh26_submission_evaluation", "job_id": 1109071846433762, "format": "MULTI_TASK", "state": "Configured; no run history returned", "task": "evaluate_submission", "notebook": "/Workspace/github/dp-light-edh/src/edh2026/evaluate_submission.py", "existing_cluster_id": "0713-163208-hm6glrk", "run_as": "service principal (identity omitted)", "schedule": "No schedule field exposed; helper invokes run_now", "bundle": "/Shared/.bundle/eval26/edh"}
+    ],
+    "pipelines": [],
+    "job_runs_visible": [],
+    "challenge_automation": ["trigger_submission.py finds the evaluation job and invokes it; it was inspected but not executed.", "local_scoring.py evaluates caller-provided validation tables locally and does not submit official results."]
+  },
+  "suitability_summary": {
+    "PIT_STRONG": [],
+    "PIT_RECONSTRUCTABLE": [],
+    "PIT_WEAK": ["ntc_month", "all generation_forecast_* tables"],
+    "CURRENT_ONLY": ["net_positions", "cross_border_exchanges"],
+    "UNKNOWN": [],
+    "interpretation": "No table has explicit issue_time plus valid_time/publication/revision metadata. Forecast-vintage labels are retained as weak evidence only; a leakage-safe forecasting run should not treat them as PIT-safe until release timing is documented or acquired."
+  },
+  "forecasting_suitability": {
+    "immediately_useful": [
+      "edh.input.net_positions for historical cross-border aggregate state",
+      "edh.input.cross_border_exchanges for directed commercial flow features",
+      "edh.input.ntc_month for transmission-capacity context",
+      "CH/DE/FR/IT/AT generation actuals and forecast-like fields for renewable and total-generation covariates"
+    ],
+    "missing_or_weak": [
+      "No explicit Swissgrid target table or target release calendar was found in edh.input.",
+      "No explicit issue/publication timestamps or forecast revision IDs.",
+      "No weather/NWP, load/demand series, hydro, outages/availability, or price tables.",
+      "Sparse hourly CH/FR technology coverage and mixed cadence in total/IT tables.",
+      "Duplicate keys in cross_border_exchanges, net_positions, ntc_month and generation_forecast_it_total.",
+      "Catalog statistics are stale for most generation tables relative to observed SQL counts."
+    ],
+    "external_data_worth_acquiring": [
+      "Swissgrid/ENTSO-E target and realized flows with explicit release timestamps",
+      "ENTSO-E day-ahead/intraday forecast vintages with publication time and revision history",
+      "Load/demand forecasts and actuals for CH plus neighboring bidding zones",
+      "Weather/NWP features for wind and solar horizons",
+      "Hydro generation/reservoir/inflow features",
+      "Generation outages/availability and cross-border capacity outages",
+      "Power prices/spreads and market-calendar features"
+    ],
+    "recommended_ingestion_order": [
+      "1. Preserve raw volume files and register ingestion metadata including source file, retrieval time, and content hash.",
+      "2. Normalize timestamp fields to UTC with mtu_start/mtu_end and retain source timezone assumptions explicitly.",
+      "3. Resolve duplicate keys and document aggregation/selection rules before modeling.",
+      "4. Add or acquire issue/publication timestamps and revision IDs; fail closed for PIT joins when absent.",
+      "5. Build audited feature tables from net positions, cross-border exchanges, NTC, and generation actuals/forecasts.",
+      "6. Add load, weather, outages/availability, hydro, prices, and target/release data in that order of expected forecasting value."
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "target_name": "REPLACE_WITH_TARGET_NAME",
+  "target_entity": "REPLACE_WITH_ENTITY",
+  "unit": "REPLACE_WITH_UNIT",
+  "sign_convention": "REPLACE_WITH_DOCUMENTED_SIGN_CONVENTION",
+  "resolution_seconds": 3600,
+  "issue_time": "2026-09-09T00:00:00+00:00",
+  "valid_time": "2026-09-09T01:00:00+00:00",
+  "horizon_seconds": 3600,
+  "aggregation": "REPLACE_WITH_AGGREGATION_RULE",
+  "label_availability": "REPLACE_WITH_LABEL_AVAILABILITY_RULE",
+  "forecast_type": "point",
+  "issue_schedule": {"timezone": "UTC", "frequency": "hourly"},
+  "horizons": [3600],
+  "quantile_levels": [0.1, 0.25, 0.5, 0.75, 0.9],
+  "evaluation_metrics": ["mae", "rmse", "bias", "pinball", "coverage", "sharpness", "brier"]
+}

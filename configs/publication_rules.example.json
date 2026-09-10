@@ -1,0 +1,14 @@
+{
+  "reconstruction_allowed": false,
+  "rules": [{
+    "source": "REPLACE_WITH_SOURCE_ID",
+    "documented_lag": 3600,
+    "rule_version": "REPLACE_WITH_RULE_VERSION",
+    "valid_from": "REPLACE_WITH_START",
+    "valid_to": "REPLACE_WITH_END",
+    "evidence_reference": "REPLACE_WITH_DOCUMENT_OR_TICKET",
+    "confidence": "unreviewed",
+    "status": "disabled",
+    "reconstruction_allowed": false
+  }]
+}

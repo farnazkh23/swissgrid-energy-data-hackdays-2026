@@ -1,0 +1,33 @@
+{
+  "dataset_path": "REPLACE_WITH_REAL_DATASET.csv",
+  "readiness_dataset_path": "../artifacts/mock_run",
+  "input_format": "csv",
+  "target_config_path": "target.example.json",
+  "sources_path": "sources.example.json",
+  "mapping_path": "column_mapping.example.json",
+  "publication_rules_path": "publication_rules.example.json",
+  "output_directory": "../artifacts/real_run",
+  "created_at": "2026-09-09T00:00:00+00:00",
+  "random_seed": 20260909,
+  "target_source_id": "REPLACE_WITH_TARGET_SOURCE_ID",
+  "target_source_record_id": "REPLACE_WITH_TARGET_RECORD_ID",
+  "issue_times": ["2026-09-09T00:00:00+00:00"],
+  "fold_config": {
+    "first_origin": "2026-01-01T00:00:00+00:00",
+    "holdout_start": "2026-09-09T00:00:00+00:00",
+    "train_window_seconds": 7776000,
+    "validation_window_seconds": 604800,
+    "calibration_window_seconds": 604800,
+    "step_seconds": 604800,
+    "purge_seconds": 0,
+    "embargo_seconds": 0,
+    "label_delay_seconds": 0
+  },
+  "enabled_champion_candidates": ["persistence", "seasonal_persistence", "historical_conditional", "ridge"],
+  "feature_source_ids": ["REPLACE_WITH_FEATURE_SOURCE_ID"],
+  "feature_families": ["calendar", "configured_sources"],
+  "feature_recommendation_policy": {"min_features": 0, "max_features": 20},
+  "expected_source_ids": ["REPLACE_WITH_TARGET_SOURCE_ID", "REPLACE_WITH_FEATURE_SOURCE_ID"],
+  "minimum_label_count": 1,
+  "include_ridge": true
+}

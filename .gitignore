@@ -1,2 +1,15 @@
 __pycache__/
 *.py[cod]
+
+# Local / licensed LSEG and external raw data
+data/lseg/raw/
+data/external/raw/
+
+# Secrets / local auth
+.env
+.env.*
+*.key
+*.pem
+.databrickscfg
+.databricks/
+*:Zone.Identifier

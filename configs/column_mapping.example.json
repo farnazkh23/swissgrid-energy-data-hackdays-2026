@@ -1,0 +1,23 @@
+{
+  "columns": {
+    "source_id": "REPLACE_SOURCE_ID_COLUMN",
+    "country": "REPLACE_COUNTRY_COLUMN",
+    "domain": "REPLACE_DOMAIN_COLUMN",
+    "unit": "REPLACE_UNIT_COLUMN",
+    "value": "REPLACE_VALUE_COLUMN",
+    "event_time": "REPLACE_EVENT_TIME_COLUMN",
+    "valid_time": "REPLACE_VALID_TIME_COLUMN",
+    "known_at": "REPLACE_KNOWN_AT_COLUMN",
+    "first_received_at": "REPLACE_FIRST_RECEIVED_AT_COLUMN",
+    "normalized_at": "REPLACE_NORMALIZED_AT_COLUMN",
+    "publication_time": "REPLACE_PUBLICATION_TIME_COLUMN",
+    "revision_id": "REPLACE_REVISION_ID_COLUMN",
+    "revision_sequence": "REPLACE_REVISION_SEQUENCE_COLUMN",
+    "source_record_id": "REPLACE_SOURCE_RECORD_ID_COLUMN"
+  },
+  "field_metadata": {
+    "value": {"source_column": "REPLACE_VALUE_COLUMN", "canonical_field": "value", "units": "REPLACE_WITH_UNIT", "time_role": "valid_time", "transform": null},
+    "event_time": {"source_column": "REPLACE_EVENT_TIME_COLUMN", "canonical_field": "event_time", "units": null, "time_role": "event", "transform": null}
+  },
+  "constants": {}
+}

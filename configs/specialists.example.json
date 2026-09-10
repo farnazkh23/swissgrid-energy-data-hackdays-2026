@@ -1,0 +1,14 @@
+{
+  "specialists": [
+    {"name": "History/Analogue", "enabled": false},
+    {"name": "Demand", "enabled": false},
+    {"name": "Weather/Renewables", "enabled": false},
+    {"name": "Generation/Outage", "enabled": false},
+    {"name": "Hydro/Storage", "enabled": false},
+    {"name": "Neighbour/Flow", "enabled": false},
+    {"name": "Market", "enabled": false},
+    {"name": "News/Event", "enabled": false},
+    {"name": "Tail/Extreme", "enabled": false}
+  ],
+  "activation_policy": "disabled_until_real_data_coverage_justifies_activation"
+}

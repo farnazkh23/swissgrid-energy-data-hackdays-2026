@@ -1,4 +1,3 @@
-# Databricks notebook source
 """Databricks-only entrypoint for the corrected Swissgrid backtest.
 
 Run this from a Databricks cluster with the repository's ``src`` directory on
@@ -16,10 +15,16 @@ import sys
 from pyspark.sql import functions as F
 from pyspark.sql.types import NumericType
 
-# The challenge helper is provided by the EDH workspace checkout.
+# Databricks workspace paths.
+# Open THIS file in Databricks and use "Run all".
+# No exec(), dbutils.import_notebook(), or external notebook import is needed.
+REPO_ROOT = "/Workspace/Users/user32@swissgridlab.onmicrosoft.com/swissgrid-energy-data-hackdays-2026"
+REPO_SRC = f"{REPO_ROOT}/src"
 EDH_SOURCE_ROOT = "/Workspace/github/dp-light-edh/src"
-if EDH_SOURCE_ROOT not in sys.path:
-    sys.path.insert(0, EDH_SOURCE_ROOT)
+
+for path in (REPO_SRC, EDH_SOURCE_ROOT):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 from edh2026.local_scoring import score_prediction_table
 from swissgrid_forecaster.oof_handoff import write_oof_handoff
@@ -247,3 +252,31 @@ def run_corrected_real_backtest(spark, *, fold_count=1,
                    "edh_local_score_first_fold": raw_score})
     _write_json(output_dir / "run_status.json", status)
     return status
+
+# COMMAND ----------
+
+# Databricks execution cell.
+# Change only FOLD_COUNT as we progress: 1 -> 3 -> 12.
+FOLD_COUNT = 1
+OUTPUT_DIR = (
+    "/Workspace/Users/user32@swissgridlab.onmicrosoft.com/"
+    "swissgrid_backtest_outputs/real_backtest"
+)
+
+print("Starting corrected Swissgrid backtest")
+print("Targets:", TARGETS)
+print("Fold count:", FOLD_COUNT)
+print("Output:", OUTPUT_DIR)
+
+assert TARGETS == ("AT", "DE", "FR", "IT")
+
+status = run_corrected_real_backtest(
+    spark,
+    fold_count=FOLD_COUNT,
+    output_dir=OUTPUT_DIR,
+)
+
+print("BACKTEST STATUS:")
+print(json.dumps(status, indent=2, sort_keys=True, default=str))
+status
+

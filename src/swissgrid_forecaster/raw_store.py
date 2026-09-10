@@ -18,9 +18,10 @@ class IntegrityError(ValueError):
 
 def _fsync_directory(directory: Path) -> None:
     """Best-effort; Windows has no directory file descriptor to fsync."""
-    if not hasattr(os, "O_DIRECTORY"):
+    directory_flag = getattr(os, "O_DIRECTORY", None)
+    if directory_flag is None:
         return
-    handle = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+    handle = os.open(directory, os.O_RDONLY | directory_flag)
     try:
         os.fsync(handle)
     finally:

@@ -120,7 +120,7 @@ def evaluate_sampler(panel: ResidualPanel, method: str, *, seed: int, n_samples:
         horizon_errors: dict = {}
         lower_q, upper_q = (1 - target_coverage) / 2, 1 - (1 - target_coverage) / 2
         for row_index, row in enumerate(held_out):
-            _, target_time, horizon, truth = row
+            _, _, horizon, truth = row
             key = bucket_key_for(method, row)
             means = {name: 0.0 for name in panel.target_names}
             draws = sample_distribution(model, means, bucket_key=key,

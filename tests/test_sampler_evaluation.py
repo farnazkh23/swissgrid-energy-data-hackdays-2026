@@ -1,5 +1,4 @@
 import unittest
-from datetime import timedelta
 
 from swissgrid_forecaster.sampler_evaluation import (
     SamplerEvaluation, WeeklyScore, capture_sharpness_curve,
@@ -50,7 +49,7 @@ class EvaluateSamplerTests(unittest.TestCase):
     def test_custom_score_fn_is_used(self):
         calls = []
 
-        def score_fn(capture, sharpness, mae, rows):
+        def score_fn(capture, sharpness, mae, _rows):
             calls.append((capture, sharpness, mae))
             return 1.0
 

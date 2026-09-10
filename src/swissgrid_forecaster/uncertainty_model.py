@@ -336,7 +336,7 @@ def fit_uncertainty_model(panel: ResidualPanel, *, method: str, fit_cutoff: date
             empirical.append((key, tuple(vectors)))
     return UncertaintyModel(panel.target_names, method, fit_cutoff, panel.identity_hash(),
                             tuple(bias), tuple(covariance), tuple(empirical),
-                            float(degrees_of_freedom) if method == "student_t" else None)
+                            float(degrees_of_freedom) if method == "student_t" and degrees_of_freedom is not None else None)
 
 
 def sample_distribution(model: UncertaintyModel, means: dict, *, bucket_key=None, seed: int,

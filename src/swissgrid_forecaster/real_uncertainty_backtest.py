@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import json
 from pathlib import Path
 
+from .edh_scoring import normalize_score_to_percentage, score_submission, validate_submission_rows
 from .sampler_evaluation import compare_samplers, evaluate_sampler, weekly_folds
 from .uncertainty_model import ResidualPanel, calibrate_scale, fit_uncertainty_model, sample_distribution
 
@@ -51,10 +52,38 @@ def load_point_forecasts(path, targets=TARGET_NAMES) -> dict:
     return forecasts
 
 
+def load_actuals(path, targets=TARGET_NAMES) -> dict:
+    """timestamp -> {target: realized value}, i.e. the same-shaped realizations table edh2026 scores against."""
+    actuals = {}
+    with open(path, newline="", encoding="utf-8") as handle:
+        for record in DictReader(handle):
+            target_time = _parse_time(record["timestamp"])
+            actuals[target_time] = {name: float(record[f"{name}_actual"]) for name in targets}
+    return actuals
+
+
+def score_samples_against_actuals(samples: tuple, actuals: dict, targets=TARGET_NAMES) -> float:
+    """Apply edh2026's exact row-score formula to our own samples vs. real realizations.
+
+    Any nonzero row count is accepted (this is the local-validation path, not
+    an official submission), matching how `score_prediction_table` may be
+    used against a validation table of any size.
+    """
+    rows = []
+    for entry in samples:
+        target_time = _parse_time(entry["timestamp"])
+        if target_time not in actuals:
+            raise ValueError("missing actual realization for a sampled timestamp")
+        samples_by_target = {name: entry[f"{name}_samples"] for name in targets}
+        rows.append((samples_by_target, actuals[target_time]))
+    return score_submission(rows)
+
+
 def compare_methods(panel: ResidualPanel, *, seed: int = 2026, n_samples: int = 300,
                     week_hours: int = 168, baseline: str = "independent_gaussian",
-                    methods: dict = METHODS) -> tuple:
+                    methods: dict | None = None) -> tuple:
     """Walk-forward comparison of every requested method; see SamplerEvaluation.to_row()."""
+    methods = METHODS if methods is None else methods
     evaluations = {name: evaluate_sampler(panel, name, seed=seed, n_samples=n_samples,
                                           week_hours=week_hours, **kwargs)
                   for name, kwargs in methods.items()}
@@ -99,6 +128,25 @@ def sample_folds(model, demo_folds, point_forecasts: dict, *, seed: int = 2026, 
     return tuple(results)
 
 
+def submission_rows(model, demo_folds, point_forecasts: dict, *, seed: int = 2026,
+                    n_samples: int = 300, week_index: int = -1) -> tuple:
+    """Sample one complete 168-hour week and validate the official submission shape."""
+    if not demo_folds:
+        raise ValueError("at least one demo week is required")
+    try:
+        selected_week = demo_folds[week_index]
+    except IndexError:
+        raise ValueError("submission week index is outside the available demo weeks") from None
+    if len(selected_week) != 168:
+        raise ValueError("submission week must contain exactly 168 timestamps")
+    samples = sample_folds(model, (selected_week,), point_forecasts,
+                           seed=seed, n_samples=n_samples)
+    rows = {entry["timestamp"]: {name: entry[f"{name}_samples"] for name in TARGET_NAMES}
+            for entry in samples}
+    validate_submission_rows(rows, TARGET_NAMES)
+    return samples
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Fit/evaluate the G4 uncertainty layer on real OOF residuals")
     parser.add_argument("--input", default="artifacts/real_backtest/oof_predictions.csv")
@@ -110,6 +158,8 @@ def main(argv=None) -> int:
     parser.add_argument("--calibration-weeks", type=int, default=2)
     parser.add_argument("--target-coverage", type=float, default=0.8)
     parser.add_argument("--champion-method", default="correlated_gaussian")
+    parser.add_argument("--submission-week-index", type=int, default=-1,
+                        help="which generated 168-hour demo week to emit as the submission artifact")
     args = parser.parse_args(argv)
 
     panel = load_residual_panel(args.input)
@@ -128,15 +178,32 @@ def main(argv=None) -> int:
         panel, args.champion_method, fit_weeks=args.fit_weeks, calibration_weeks=args.calibration_weeks,
         target_coverage=args.target_coverage, seed=args.seed, n_samples=args.n_samples, **champion_kwargs)
     point_forecasts = load_point_forecasts(args.input)
-    samples = sample_folds(calibrated, demo_folds, point_forecasts, seed=args.seed, n_samples=args.n_samples)
+    demo_samples = sample_folds(calibrated, demo_folds, point_forecasts,
+                                seed=args.seed, n_samples=args.n_samples)
+    demo_samples_path = output_dir / "uncertainty_demo_samples.json"
+    demo_samples_path.write_text(json.dumps(demo_samples, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    samples = submission_rows(calibrated, demo_folds, point_forecasts, seed=args.seed,
+                              n_samples=args.n_samples, week_index=args.submission_week_index)
     samples_path = output_dir / "uncertainty_champion_samples.json"
     samples_path.write_text(json.dumps(samples, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    actuals = load_actuals(args.input)
+    official_score = score_samples_against_actuals(demo_samples, actuals)
+    score_path = output_dir / "edh_local_score.json"
+    score_path.write_text(json.dumps({
+        "raw_score": official_score,
+        "percentage": normalize_score_to_percentage(official_score),
+        "rows_scored": len(demo_samples),
+        "note": "local validation score (edh2026's exact row formula); not an official 168-row submission",
+    }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     print("method comparison (best first):")
     for row in ranked:
         print(f"  {row.method}: mean_score={row.mean_score:.3f} capture={row.capture_rate:.3f} "
               f"sharpness={row.mean_sharpness:.1f} keep_drop={row.keep_drop}")
-    print(f"champion={args.champion_method} written to {comparison_path} and {samples_path}")
+    print(f"champion={args.champion_method} written to {comparison_path}, {demo_samples_path}, and {samples_path}")
+    print(f"edh2026 local score over {len(demo_samples)} demo rows: "
+          f"{official_score:.4f} ({normalize_score_to_percentage(official_score):.1f}%) -> {score_path}")
     return 0
 
 

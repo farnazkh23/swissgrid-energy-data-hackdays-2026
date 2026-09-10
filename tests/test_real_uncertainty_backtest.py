@@ -3,8 +3,10 @@ from pathlib import Path
 
 from swissgrid_forecaster.real_uncertainty_backtest import (
     TARGET_NAMES, compare_methods, fit_calibrated_champion,
-    load_point_forecasts, load_residual_panel, sample_folds,
+    load_actuals, load_point_forecasts, load_residual_panel,
+    sample_folds, score_samples_against_actuals,
 )
+from swissgrid_forecaster.edh_scoring import PERFECT_SCORE
 from swissgrid_forecaster.uncertainty_model import ResidualPanel
 from swissgrid_forecaster.sampler_evaluation import weekly_folds
 
@@ -70,6 +72,27 @@ class CalibratedChampionSamplingTests(unittest.TestCase):
         panel = small_panel(3)
         with self.assertRaises(ValueError):
             fit_calibrated_champion(panel, "correlated_gaussian", fit_weeks=2, calibration_weeks=1, seed=1)
+
+
+@unittest.skipUnless(CSV_PATH.is_file(), "real OOF backtest artifact not present")
+class ScoreAgainstRealActualsTests(unittest.TestCase):
+    def test_official_formula_scores_our_real_champion_samples(self):
+        panel = small_panel(6)
+        calibrated, demo_folds = fit_calibrated_champion(
+            panel, "correlated_gaussian", fit_weeks=3, calibration_weeks=1,
+            target_coverage=0.8, seed=5, n_samples=30)
+        point_forecasts = load_point_forecasts(CSV_PATH)
+        # edh2026's formula requires exactly 300 samples per array, unlike the other (faster) tests here.
+        samples = sample_folds(calibrated, demo_folds, point_forecasts, seed=5, n_samples=300)
+        actuals = load_actuals(CSV_PATH)
+        score = score_samples_against_actuals(samples, actuals)
+        self.assertGreater(score, 0.0)
+        self.assertLessEqual(score, PERFECT_SCORE)
+
+    def test_missing_actual_rejected(self):
+        with self.assertRaises(ValueError):
+            score_samples_against_actuals(({"timestamp": "2099-01-01T00:00:00+00:00",
+                                           **{f"{n}_samples": [0] * 300 for n in TARGET_NAMES}},), {})
 
 
 if __name__ == "__main__":

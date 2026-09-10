@@ -28,10 +28,11 @@ from xml.etree import ElementTree
 from zipfile import ZipFile
 from zoneinfo import ZoneInfo
 
+from .target_contract import TARGETS
+
 
 UTC = timezone.utc
 PARIS = ZoneInfo("Europe/Paris")
-TARGETS = ("CH", "DE", "FR", "IT")
 DB_TABLES = ("edh.input.cross_border_exchanges", "edh.input.ntc_month")
 LSEG_FAMILIES = ("fr_it_prices", "italy_demand", "fr_nuclear_pit", "edf_remit_events")
 
@@ -426,7 +427,7 @@ def build_features(*, target_history: Mapping[datetime, Mapping[str, float]],
         add(f"target_{target}_rolling_std_24h", sqrt(mean((value - mean(prior)) ** 2 for value in prior)) if all(value is not None for value in prior) else None)
         one = _lookup(series, stamp, issue, 1); two = _lookup(series, stamp, issue, 2)
         add(f"target_{target}_ramp_1h", one - two if one is not None and two is not None else None)
-    for table_name in DB_TABLES:
+    for table_name in sorted(db_tables):
         table = db_tables.get(table_name, {})
         columns = sorted((db_series or {}).get(table_name, {})) or sorted({column for row in table.values() for column in row})
         base = table_name.split(".")[-1]
@@ -592,8 +593,10 @@ def _summarize(rows: list[dict], *, scenario: str, model: str, target: str) -> d
 
 
 def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
-                  model_names=("seasonal_persistence", "ridge", "hist_gradient_boosting")):
+                  model_names=("seasonal_persistence", "ridge", "hist_gradient_boosting"),
+                  collect_predictions=False):
     fold_scores: list[dict] = []; summaries = []
+    point_predictions: list[dict] = []
     target_series = {target: {stamp: row[target] for stamp, row in targets.items()} for target in TARGETS}
     db_series = {table: {column: {stamp: row[column] for stamp, row in rows.items() if column in row}
                          for column in sorted({column for row in rows.values() for column in row})}
@@ -619,13 +622,22 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
                 samples = [_sample(value, residuals, seed + fold_index * 1000003 + target_seed * 1009 + index) for index, value in enumerate(point)]
                 score = _fold_metric(truth, point, samples)
                 fold_scores.append({"fold_id": fold.fold_id, "model": model_name, "target": target, **score, "sample_count": 300})
+                if collect_predictions:
+                    point_predictions.extend(
+                        {"fold_id": fold.fold_id, "timestamp": stamp.isoformat(),
+                         "issue_time": fold.forecast_start.isoformat(), "horizon": 1,
+                         "model": model_name, "target": target, "actual": actual,
+                         "pred": prediction}
+                        for stamp, actual, prediction in zip(fold.forecast_timestamps, truth, point)
+                    )
     for model in model_names:
         for target in TARGETS:
             summaries.append(_summarize([row for row in fold_scores if row["model"] == model and row["target"] == target], scenario=scenario, model=model, target=target))
-    return summaries, fold_scores
+    return summaries, fold_scores, point_predictions
 
 
 def run_v1(*, net_rows: Iterable[Mapping], cross_rows: Iterable[Mapping], ntc_rows: Iterable[Mapping],
+           generation_rows: Iterable[Mapping] = (),
            lseg_root: str | Path | None = None, max_folds: int = 12, start_at: datetime | None = None,
            output_dir: str | Path | None = None, seed: int = 20260910,
            family_ablation: bool = False) -> dict:
@@ -633,10 +645,12 @@ def run_v1(*, net_rows: Iterable[Mapping], cross_rows: Iterable[Mapping], ntc_ro
     if not targets: raise ValueError("no complete hourly targets")
     folds = make_weekly_folds(targets, max_folds=max_folds, start_at=start_at)
     if len(folds) != max_folds: raise ValueError(f"expected {max_folds} complete folds, got {len(folds)}")
-    lseg = load_lseg_features(lseg_root)
+    lseg = load_lseg_features(lseg_root) if lseg_root is not None else LSEGFeatures({}, {}, {}, ())
     db_tables = {DB_TABLES[0]: _hourly_table(cross_rows), DB_TABLES[1]: _hourly_table(ntc_rows)}
-    db_summary, db_folds = _run_scenario(targets=targets, db_tables=db_tables, lseg=lseg, folds=folds, use_lseg=False, scenario="databricks_only", seed=seed)
-    all_summary, all_folds = _run_scenario(targets=targets, db_tables=db_tables, lseg=lseg, folds=folds, use_lseg=True, scenario="databricks_plus_lseg", seed=seed)
+    if generation_rows:
+        db_tables["edh.input.generation_forecast"] = _hourly_table(generation_rows)
+    db_summary, db_folds, _ = _run_scenario(targets=targets, db_tables=db_tables, lseg=lseg, folds=folds, use_lseg=False, scenario="databricks_only", seed=seed)
+    all_summary, all_folds, all_predictions = _run_scenario(targets=targets, db_tables=db_tables, lseg=lseg, folds=folds, use_lseg=True, scenario="databricks_plus_lseg", seed=seed, collect_predictions=True)
     ablation = []
     for base, candidate in zip(db_summary, all_summary):
         ablation.append({"feature_family": "lseg_all", "model": base["model"], "target": base["target"],
@@ -665,7 +679,7 @@ def run_v1(*, net_rows: Iterable[Mapping], cross_rows: Iterable[Mapping], ntc_ro
         for family in LSEG_FAMILIES:
             if any(row["feature_family"] == family for row in ablation):
                 continue
-            family_summary, _ = _run_scenario(targets=targets, db_tables=db_tables, lseg=lseg, folds=folds,
+            family_summary, _, _ = _run_scenario(targets=targets, db_tables=db_tables, lseg=lseg, folds=folds,
                                               use_lseg=(family,), scenario=f"databricks_plus_{family}", seed=seed,
                                               model_names=("ridge",))
             by_key = {(row["model"], row["target"]): row for row in family_summary}
@@ -679,21 +693,41 @@ def run_v1(*, net_rows: Iterable[Mapping], cross_rows: Iterable[Mapping], ntc_ro
                                  "base_weekly_score": base["weekly_score_mean"], "candidate_weekly_score": candidate["weekly_score_mean"],
                                  "weekly_score_gain": base["weekly_score_mean"] - candidate["weekly_score_mean"],
                                  "decision": "retain only if robust positive gain"})
+    selected_models = {}
+    for target in TARGETS:
+        candidates = [row for row in all_summary if row["target"] == target]
+        selected_models[target] = min(candidates, key=lambda row: (row["mae_mean"], row["model"]))
+    champion_names = {target: row["model"] for target, row in selected_models.items()}
+    selected_predictions = [row for row in all_predictions if row["model"] == champion_names[row["target"]]]
+    by_key = {(row["fold_id"], row["timestamp"]): row for row in selected_predictions}
+    oof_predictions = []
+    for key in sorted(by_key, key=lambda value: (by_key[value]["timestamp"], value[0])):
+        values = {target: by_key[(key[0], key[1])] for target in TARGETS}
+        first = values[TARGETS[0]]
+        row = {"timestamp": first["timestamp"], "fold_id": first["fold_id"],
+               "horizon": first["horizon"], "issue_time": first["issue_time"]}
+        for target in TARGETS:
+            row[f"{target}_actual"] = values[target]["actual"]
+            row[f"{target}_pred"] = values[target]["pred"]
+            row[f"{target}_residual"] = values[target]["actual"] - values[target]["pred"]
+        oof_predictions.append(row)
     result = {"target_manifest": {"target_names": list(TARGETS), "complete_hourly_rows": len(targets),
                                    "min_timestamp": min(targets).isoformat(), "max_timestamp": max(targets).isoformat(),
                                    "aggregation": "mean of four complete UTC quarter-hour observations", "unit": "MW",
                                    "sign_convention": "provider net-position sign; positive means net export"},
               "fold_manifest": {"fold_count": len(folds), "forecast_hours": 168, "folds": [fold.manifest() for fold in folds]},
               "scoreboard": db_summary + all_summary, "fold_scores": db_folds + all_folds, "ablation": ablation,
+              "champions": champion_names, "oof_predictions": oof_predictions,
               "lseg_inventory": list(lseg.metadata),
               "diagnostics": {"models": ["seasonal_persistence", "ridge", "hist_gradient_boosting"],
                               "tree_engine": "dependency-free histogram gradient boosting; sklearn unavailable",
                               "sample_count": 300, "deterministic_seed": seed,
                               "lseg_series_nonempty": {name: len(values) for name, values in lseg.series.items()},
                               "official_scorer_invoked": False, "official_scorer_reason": "Databricks scorer namespace is not available locally"},
-              "provenance": {"raw_lseg_used": True, "raw_lseg_path": str(resolve_lseg_root(lseg_root)),
+              "provenance": {"raw_lseg_used": lseg_root is not None,
+                             "raw_lseg_path": str(resolve_lseg_root(lseg_root)) if lseg_root is not None else None,
                              "raw_lseg_copied": False, "pit_policy": "known_at <= issue_time; future-valid values without publication clocks excluded",
-                             "source_tables": list(DB_TABLES), "feature_families": list(LSEG_FAMILIES)}}
+                             "source_tables": [*DB_TABLES, "edh.input.generation_forecast"], "feature_families": list(LSEG_FAMILIES)}}
     if output_dir is not None: write_v1_artifacts(result, output_dir)
     return result
 

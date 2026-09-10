@@ -14,12 +14,14 @@ from pathlib import Path
 
 from .edh_scoring import normalize_score_to_percentage, score_submission, validate_submission_rows
 from .sampler_evaluation import compare_samplers, evaluate_sampler, weekly_folds
+from .target_contract import TARGETS
 from .uncertainty_model import ResidualPanel, calibrate_scale, fit_uncertainty_model, sample_distribution
 
-TARGET_NAMES = ("CH", "DE", "FR", "IT")
+TARGET_NAMES = TARGETS
 METHODS = {
     "independent_gaussian": {},
     "correlated_gaussian": {},
+    "horizon_covariance": {},
     "student_t": {"degrees_of_freedom": 6.0},
     "empirical_bootstrap": {},
 }

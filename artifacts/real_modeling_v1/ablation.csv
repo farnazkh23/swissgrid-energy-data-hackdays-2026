@@ -1,0 +1,61 @@
+base_mae,base_weekly_score,candidate_mae,candidate_weekly_score,decision,feature_family,mae_gain,model,target,weekly_score_gain
+1066.2113095238096,1066.2113095238096,1066.2113095238096,1066.2113095238096,retain only if robust positive gain,lseg_all,0.0,seasonal_persistence,CH,0.0
+3858.5178571428573,3858.5178571428573,3858.5178571428573,3858.5178571428573,retain only if robust positive gain,lseg_all,0.0,seasonal_persistence,DE,0.0
+3053.6458333333335,3053.6458333333335,3053.6458333333335,3053.6458333333335,retain only if robust positive gain,lseg_all,0.0,seasonal_persistence,FR,0.0
+930.6909722222222,930.6909722222222,930.6909722222222,930.6909722222222,retain only if robust positive gain,lseg_all,0.0,seasonal_persistence,IT,0.0
+1251.4849494966875,1251.4849494966875,1252.4612273489427,1252.4612273489427,retain only if robust positive gain,lseg_all,-0.9762778522551798,ridge,CH,-0.9762778522551798
+2926.2950695673658,2926.2950695673658,2919.8645297679345,2919.8645297679345,retain only if robust positive gain,lseg_all,6.430539799431244,ridge,DE,6.430539799431244
+3161.636620349286,3161.636620349286,3153.509422364091,3153.509422364091,retain only if robust positive gain,lseg_all,8.12719798519538,ridge,FR,8.12719798519538
+1259.341577822231,1259.341577822231,1262.2009244336182,1262.2009244336182,retain only if robust positive gain,lseg_all,-2.859346611387082,ridge,IT,-2.859346611387082
+1202.3286068457285,1202.3286068457285,1202.3286068457285,1202.3286068457285,retain only if robust positive gain,lseg_all,0.0,hist_gradient_boosting,CH,0.0
+2973.016931867177,2973.016931867177,2973.016931867177,2973.016931867177,retain only if robust positive gain,lseg_all,0.0,hist_gradient_boosting,DE,0.0
+3331.021736826784,3331.021736826784,3327.7236434305523,3327.7236434305523,retain only if robust positive gain,lseg_all,3.2980933962317067,hist_gradient_boosting,FR,3.2980933962317067
+1237.6874943941139,1237.6874943941139,1237.6875133472467,1237.6875133472467,retain only if robust positive gain,lseg_all,-1.895313289423939e-05,hist_gradient_boosting,IT,-1.895313289423939e-05
+1066.2113095238096,1066.2113095238096,1066.2113095238096,1066.2113095238096,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,seasonal_persistence,CH,0.0
+3858.5178571428573,3858.5178571428573,3858.5178571428573,3858.5178571428573,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,seasonal_persistence,DE,0.0
+3053.6458333333335,3053.6458333333335,3053.6458333333335,3053.6458333333335,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,seasonal_persistence,FR,0.0
+930.6909722222222,930.6909722222222,930.6909722222222,930.6909722222222,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,seasonal_persistence,IT,0.0
+1251.4849494966875,1251.4849494966875,1251.4849494966875,1251.4849494966875,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,ridge,CH,0.0
+2926.2950695673658,2926.2950695673658,2926.2950695673658,2926.2950695673658,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,ridge,DE,0.0
+3161.636620349286,3161.636620349286,3161.636620349286,3161.636620349286,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,ridge,FR,0.0
+1259.341577822231,1259.341577822231,1259.341577822231,1259.341577822231,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,ridge,IT,0.0
+1202.3286068457285,1202.3286068457285,1202.3286068457285,1202.3286068457285,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,hist_gradient_boosting,CH,0.0
+2973.016931867177,2973.016931867177,2973.016931867177,2973.016931867177,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,hist_gradient_boosting,DE,0.0
+3331.021736826784,3331.021736826784,3331.021736826784,3331.021736826784,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,hist_gradient_boosting,FR,0.0
+1237.6874943941139,1237.6874943941139,1237.6874943941139,1237.6874943941139,availability-resolved; retain only if robust positive gain,fr_it_prices,0.0,hist_gradient_boosting,IT,0.0
+1066.2113095238096,1066.2113095238096,1066.2113095238096,1066.2113095238096,availability-resolved; retain only if robust positive gain,italy_demand,0.0,seasonal_persistence,CH,0.0
+3858.5178571428573,3858.5178571428573,3858.5178571428573,3858.5178571428573,availability-resolved; retain only if robust positive gain,italy_demand,0.0,seasonal_persistence,DE,0.0
+3053.6458333333335,3053.6458333333335,3053.6458333333335,3053.6458333333335,availability-resolved; retain only if robust positive gain,italy_demand,0.0,seasonal_persistence,FR,0.0
+930.6909722222222,930.6909722222222,930.6909722222222,930.6909722222222,availability-resolved; retain only if robust positive gain,italy_demand,0.0,seasonal_persistence,IT,0.0
+1251.4849494966875,1251.4849494966875,1251.4849494966875,1251.4849494966875,availability-resolved; retain only if robust positive gain,italy_demand,0.0,ridge,CH,0.0
+2926.2950695673658,2926.2950695673658,2926.2950695673658,2926.2950695673658,availability-resolved; retain only if robust positive gain,italy_demand,0.0,ridge,DE,0.0
+3161.636620349286,3161.636620349286,3161.636620349286,3161.636620349286,availability-resolved; retain only if robust positive gain,italy_demand,0.0,ridge,FR,0.0
+1259.341577822231,1259.341577822231,1259.341577822231,1259.341577822231,availability-resolved; retain only if robust positive gain,italy_demand,0.0,ridge,IT,0.0
+1202.3286068457285,1202.3286068457285,1202.3286068457285,1202.3286068457285,availability-resolved; retain only if robust positive gain,italy_demand,0.0,hist_gradient_boosting,CH,0.0
+2973.016931867177,2973.016931867177,2973.016931867177,2973.016931867177,availability-resolved; retain only if robust positive gain,italy_demand,0.0,hist_gradient_boosting,DE,0.0
+3331.021736826784,3331.021736826784,3331.021736826784,3331.021736826784,availability-resolved; retain only if robust positive gain,italy_demand,0.0,hist_gradient_boosting,FR,0.0
+1237.6874943941139,1237.6874943941139,1237.6874943941139,1237.6874943941139,availability-resolved; retain only if robust positive gain,italy_demand,0.0,hist_gradient_boosting,IT,0.0
+1066.2113095238096,1066.2113095238096,1066.2113095238096,1066.2113095238096,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,0.0,seasonal_persistence,CH,0.0
+3858.5178571428573,3858.5178571428573,3858.5178571428573,3858.5178571428573,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,0.0,seasonal_persistence,DE,0.0
+3053.6458333333335,3053.6458333333335,3053.6458333333335,3053.6458333333335,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,0.0,seasonal_persistence,FR,0.0
+930.6909722222222,930.6909722222222,930.6909722222222,930.6909722222222,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,0.0,seasonal_persistence,IT,0.0
+1251.4849494966875,1251.4849494966875,1252.4612273489427,1252.4612273489427,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,-0.9762778522551798,ridge,CH,-0.9762778522551798
+2926.2950695673658,2926.2950695673658,2919.8645297679345,2919.8645297679345,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,6.430539799431244,ridge,DE,6.430539799431244
+3161.636620349286,3161.636620349286,3153.509422364091,3153.509422364091,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,8.12719798519538,ridge,FR,8.12719798519538
+1259.341577822231,1259.341577822231,1262.2009244336182,1262.2009244336182,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,-2.859346611387082,ridge,IT,-2.859346611387082
+1202.3286068457285,1202.3286068457285,1202.3286068457285,1202.3286068457285,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,0.0,hist_gradient_boosting,CH,0.0
+2973.016931867177,2973.016931867177,2973.016931867177,2973.016931867177,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,0.0,hist_gradient_boosting,DE,0.0
+3331.021736826784,3331.021736826784,3327.7236434305523,3327.7236434305523,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,3.2980933962317067,hist_gradient_boosting,FR,3.2980933962317067
+1237.6874943941139,1237.6874943941139,1237.6875133472467,1237.6875133472467,availability-resolved; retain only if robust positive gain,fr_nuclear_pit,-1.895313289423939e-05,hist_gradient_boosting,IT,-1.895313289423939e-05
+1066.2113095238096,1066.2113095238096,1066.2113095238096,1066.2113095238096,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,seasonal_persistence,CH,0.0
+3858.5178571428573,3858.5178571428573,3858.5178571428573,3858.5178571428573,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,seasonal_persistence,DE,0.0
+3053.6458333333335,3053.6458333333335,3053.6458333333335,3053.6458333333335,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,seasonal_persistence,FR,0.0
+930.6909722222222,930.6909722222222,930.6909722222222,930.6909722222222,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,seasonal_persistence,IT,0.0
+1251.4849494966875,1251.4849494966875,1251.4849494966875,1251.4849494966875,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,ridge,CH,0.0
+2926.2950695673658,2926.2950695673658,2926.2950695673658,2926.2950695673658,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,ridge,DE,0.0
+3161.636620349286,3161.636620349286,3161.636620349286,3161.636620349286,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,ridge,FR,0.0
+1259.341577822231,1259.341577822231,1259.341577822231,1259.341577822231,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,ridge,IT,0.0
+1202.3286068457285,1202.3286068457285,1202.3286068457285,1202.3286068457285,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,hist_gradient_boosting,CH,0.0
+2973.016931867177,2973.016931867177,2973.016931867177,2973.016931867177,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,hist_gradient_boosting,DE,0.0
+3331.021736826784,3331.021736826784,3331.021736826784,3331.021736826784,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,hist_gradient_boosting,FR,0.0
+1237.6874943941139,1237.6874943941139,1237.6874943941139,1237.6874943941139,availability-resolved; retain only if robust positive gain,edf_remit_events,0.0,hist_gradient_boosting,IT,0.0

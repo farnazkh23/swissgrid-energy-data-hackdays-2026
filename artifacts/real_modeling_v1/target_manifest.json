@@ -1,0 +1,14 @@
+{
+  "aggregation": "mean of four complete UTC quarter-hour observations",
+  "complete_hourly_rows": 66926,
+  "max_timestamp": "2026-08-20T23:00:00+00:00",
+  "min_timestamp": "2019-01-01T01:00:00+00:00",
+  "sign_convention": "provider net-position sign; positive means net export",
+  "target_names": [
+    "CH",
+    "DE",
+    "FR",
+    "IT"
+  ],
+  "unit": "MW"
+}

@@ -1,0 +1,138 @@
+{
+  "fold_count": 12,
+  "folds": [
+    {
+      "fold_id": "week_20190129T010000Z",
+      "forecast_end": "2019-02-05T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-01-29T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-01-29T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-01-01T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190205T010000Z",
+      "forecast_end": "2019-02-12T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-02-05T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-02-05T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-01-08T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190212T010000Z",
+      "forecast_end": "2019-02-19T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-02-12T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-02-12T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-01-15T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190219T010000Z",
+      "forecast_end": "2019-02-26T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-02-19T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-02-19T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-01-22T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190226T010000Z",
+      "forecast_end": "2019-03-05T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-02-26T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-02-26T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-01-29T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190305T010000Z",
+      "forecast_end": "2019-03-12T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-03-05T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-03-05T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-02-05T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190312T010000Z",
+      "forecast_end": "2019-03-19T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-03-12T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-03-12T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-02-12T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190319T010000Z",
+      "forecast_end": "2019-03-26T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-03-19T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-03-19T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-02-19T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190430T010000Z",
+      "forecast_end": "2019-05-07T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-04-30T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-04-30T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-04-02T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190507T010000Z",
+      "forecast_end": "2019-05-14T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-05-07T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-05-07T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-04-09T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190514T010000Z",
+      "forecast_end": "2019-05-21T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-05-14T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-05-14T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-04-16T01:00:00+00:00"
+    },
+    {
+      "fold_id": "week_20190521T010000Z",
+      "forecast_end": "2019-05-28T00:00:00+00:00",
+      "forecast_hours": 168,
+      "forecast_rows": 168,
+      "forecast_start": "2019-05-21T01:00:00+00:00",
+      "leakage_check": "train timestamps precede forecast_start",
+      "train_end": "2019-05-21T00:00:00+00:00",
+      "train_rows": 672,
+      "train_start": "2019-04-23T01:00:00+00:00"
+    }
+  ],
+  "forecast_hours": 168
+}

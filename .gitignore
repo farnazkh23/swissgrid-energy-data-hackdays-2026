@@ -3,6 +3,8 @@ __pycache__/
 
 # Local / licensed LSEG and external raw data
 data/lseg/raw/
+data/lseg/raw
+data/
 data/external/raw/
 
 # Secrets / local auth

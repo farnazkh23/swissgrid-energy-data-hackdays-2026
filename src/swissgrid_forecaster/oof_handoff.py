@@ -86,7 +86,15 @@ def build_oof_handoff(oof_by_target, champions_by_target):
     rows = []
     for fold_id, row_id in sorted(reference, key=lambda key: (per_target[TARGETS[0]][key][0].issue_time, key[0])):
         first = per_target[TARGETS[0]][(fold_id, row_id)][0]
-        horizon = int((first.target_time - first.issue_time).total_seconds())
+        horizon_seconds = (first.target_time - first.issue_time).total_seconds()
+        if horizon_seconds <= 0:
+            raise ValueError("OOF horizon must be positive")
+        # Persist horizon in hours; ResidualPanel stores the same duration as
+        # timedelta, so the CSV has one explicit, unambiguous unit. Fractional
+        # hours remain valid for non-hourly generic OOF contracts.
+        horizon = horizon_seconds / 3600
+        if horizon.is_integer():
+            horizon = int(horizon)
         row = {"timestamp": first.target_time.isoformat(), "fold_id": fold_id,
                "horizon": horizon, "issue_time": first.issue_time.isoformat()}
         for entity in TARGETS:
@@ -121,6 +129,7 @@ def residual_summary(rows, champions_by_target):
                "target_order": list(TARGETS),
                "residual_vector_order": list(RESIDUAL_VECTOR_ORDER),
                "residual_definition": RESIDUAL_DEFINITION,
+               "horizon_unit": "hours",
                "handoff_columns": list(columns),
                "rows": len(rows),
                "folds": sorted({row["fold_id"] for row in rows}),

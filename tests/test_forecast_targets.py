@@ -170,7 +170,7 @@ class OOFHandoffTests(unittest.TestCase):
 
     def test_handoff_uses_true_oof_predictions_and_residual_definition(self):
         rows, champions = self.handoff()
-        expected_horizon = int((samples()[0].target_time - samples()[0].issue_time).total_seconds())
+        expected_horizon = (samples()[0].target_time - samples()[0].issue_time).total_seconds() / 3600
         for row in rows:
             for entity in TARGETS:
                 self.assertAlmostEqual(row[f"{entity}_residual"],

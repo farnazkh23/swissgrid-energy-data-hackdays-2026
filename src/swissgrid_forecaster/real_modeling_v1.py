@@ -604,7 +604,10 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
     for fold_index, fold in enumerate(folds):
         for target in TARGETS:
             train = [(build_features(target_history=targets, db_tables=db_tables, db_series=db_series, target_series=target_series, lseg=lseg, stamp=stamp, issue=stamp, use_lseg=use_lseg)[1], targets[stamp][target]) for stamp in fold.train_timestamps]
-            future = [(build_features(target_history=targets, db_tables=db_tables, db_series=db_series, target_series=target_series, lseg=lseg, stamp=stamp, issue=fold.forecast_start, use_lseg=use_lseg)[1], targets[stamp][target]) for stamp in fold.forecast_timestamps]
+            # Fold forecast timestamps are target/valid times. This benchmark
+            # is one-hour ahead, so each feature snapshot is as-of target - 1h;
+            # using the target timestamp would expose current/future values.
+            future = [(build_features(target_history=targets, db_tables=db_tables, db_series=db_series, target_series=target_series, lseg=lseg, stamp=stamp, issue=stamp - timedelta(hours=1), use_lseg=use_lseg)[1], targets[stamp][target]) for stamp in fold.forecast_timestamps]
             models = {"seasonal_persistence": None}
             if "ridge" in model_names:
                 models["ridge"] = Ridge().fit(train)
@@ -624,8 +627,9 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
                 fold_scores.append({"fold_id": fold.fold_id, "model": model_name, "target": target, **score, "sample_count": 300})
                 if collect_predictions:
                     point_predictions.extend(
-                        {"fold_id": fold.fold_id, "timestamp": stamp.isoformat(),
-                         "issue_time": fold.forecast_start.isoformat(), "horizon": 1,
+                        {"fold_id": fold.fold_id, "row_id": f"{fold.fold_id}:{stamp.isoformat()}",
+                         "timestamp": stamp.isoformat(),
+                         "issue_time": (stamp - timedelta(hours=1)).isoformat(), "horizon": 1,
                          "model": model_name, "target": target, "actual": actual,
                          "pred": prediction}
                         for stamp, actual, prediction in zip(fold.forecast_timestamps, truth, point)
@@ -699,14 +703,31 @@ def run_v1(*, net_rows: Iterable[Mapping], cross_rows: Iterable[Mapping], ntc_ro
         selected_models[target] = min(candidates, key=lambda row: (row["mae_mean"], row["model"]))
     champion_names = {target: row["model"] for target, row in selected_models.items()}
     selected_predictions = [row for row in all_predictions if row["model"] == champion_names[row["target"]]]
+    per_target_keys = {target: {(row["fold_id"], row["timestamp"])
+                                for row in selected_predictions if row["target"] == target}
+                       for target in TARGETS}
+    reference_keys = per_target_keys[TARGETS[0]]
+    if any(per_target_keys[target] != reference_keys for target in TARGETS[1:]):
+        raise ValueError("selected OOF targets are not aligned on fold_id and target timestamp")
+    prediction_keys = {(row["fold_id"], row["timestamp"], row["target"])
+                       for row in selected_predictions}
+    if len(prediction_keys) != len(selected_predictions):
+        raise ValueError("duplicate selected OOF prediction")
     by_key = {(row["fold_id"], row["timestamp"]): row for row in selected_predictions}
     oof_predictions = []
     for key in sorted(by_key, key=lambda value: (by_key[value]["timestamp"], value[0])):
         values = {target: by_key[(key[0], key[1])] for target in TARGETS}
         first = values[TARGETS[0]]
+        target_time = datetime.fromisoformat(first["timestamp"])
+        issue_time = datetime.fromisoformat(first["issue_time"])
+        horizon_hours = (target_time - issue_time).total_seconds() / 3600
+        if issue_time >= target_time or horizon_hours <= 0 or horizon_hours != first["horizon"]:
+            raise ValueError("invalid selected OOF chronology or horizon")
         row = {"timestamp": first["timestamp"], "fold_id": first["fold_id"],
-               "horizon": first["horizon"], "issue_time": first["issue_time"]}
+               "horizon": int(horizon_hours), "issue_time": first["issue_time"]}
         for target in TARGETS:
+            if (values[target]["issue_time"], values[target]["timestamp"], values[target]["horizon"]) != (first["issue_time"], first["timestamp"], first["horizon"]):
+                raise ValueError("selected OOF target timestamps are misaligned")
             row[f"{target}_actual"] = values[target]["actual"]
             row[f"{target}_pred"] = values[target]["pred"]
             row[f"{target}_residual"] = values[target]["actual"] - values[target]["pred"]

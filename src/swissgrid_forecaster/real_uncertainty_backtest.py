@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .edh_scoring import normalize_score_to_percentage, score_submission, validate_submission_rows
 from .sampler_evaluation import compare_samplers, evaluate_sampler, weekly_folds
-from .target_contract import TARGETS
+from .target_contract import TARGETS, validate_output_targets
 from .uncertainty_model import ResidualPanel, calibrate_scale, fit_uncertainty_model, sample_distribution
 
 TARGET_NAMES = TARGETS
@@ -32,13 +32,16 @@ def _parse_time(value: str) -> datetime:
 
 
 def load_residual_panel(path, targets=TARGET_NAMES) -> ResidualPanel:
-    """Build a ResidualPanel directly from the CSV's `*_residual` columns."""
+    """Build a ResidualPanel; persisted ``horizon`` is an hour count."""
+    validate_output_targets(targets)
     rows = []
     with open(path, newline="", encoding="utf-8") as handle:
         for record in DictReader(handle):
             issue_time = _parse_time(record["issue_time"])
             target_time = _parse_time(record["timestamp"])
             horizon = timedelta(hours=float(record["horizon"]))
+            if issue_time >= target_time or horizon != target_time - issue_time:
+                raise ValueError("invalid OOF chronology or horizon; horizon is stored in hours")
             residuals = tuple(float(record[f"{name}_residual"]) for name in targets)
             rows.append((issue_time, target_time, horizon, residuals))
     return ResidualPanel(tuple(targets), tuple(rows))
@@ -46,6 +49,7 @@ def load_residual_panel(path, targets=TARGET_NAMES) -> ResidualPanel:
 
 def load_point_forecasts(path, targets=TARGET_NAMES) -> dict:
     """timestamp -> {target: point forecast}, for demo sampling around real mu."""
+    validate_output_targets(targets)
     forecasts = {}
     with open(path, newline="", encoding="utf-8") as handle:
         for record in DictReader(handle):
@@ -56,6 +60,7 @@ def load_point_forecasts(path, targets=TARGET_NAMES) -> dict:
 
 def load_actuals(path, targets=TARGET_NAMES) -> dict:
     """timestamp -> {target: realized value}, i.e. the same-shaped realizations table edh2026 scores against."""
+    validate_output_targets(targets)
     actuals = {}
     with open(path, newline="", encoding="utf-8") as handle:
         for record in DictReader(handle):

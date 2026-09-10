@@ -31,10 +31,8 @@ from swissgrid_forecaster.oof_handoff import write_oof_handoff
 from swissgrid_forecaster.real_modeling_v1 import TARGETS, make_weekly_folds, run_v1
 from swissgrid_forecaster.real_uncertainty_backtest import (
     METHODS, compare_methods, fit_calibrated_champion,
-    load_point_forecasts, sample_folds,
+    load_point_forecasts, load_residual_panel, sample_folds,
 )
-from swissgrid_forecaster.uncertainty_model import ResidualPanel
-from csv import DictReader
 
 
 GENERATION_ALLOWED_FIELD = "generation_forecast"
@@ -43,34 +41,6 @@ GENERATION_FORBIDDEN_FIELDS = frozenset({
     "day_ahead", "intraday",
 })
 UTC = timezone.utc
-
-
-def _parse_iso_time(value):
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def _load_residual_panel(path, targets=TARGETS):
-    """Load OOF residuals and derive horizon from timestamps.
-
-    The persisted OOF `horizon` field is legacy/ambiguous (seconds in the
-    handoff writer, historically interpreted as hours by the uncertainty
-    loader). Deriving the duration from target_time - issue_time removes the
-    unit mismatch and preserves chronology.
-    """
-    rows = []
-    with open(path, newline="", encoding="utf-8") as handle:
-        for record in DictReader(handle):
-            issue_time = _parse_iso_time(record["issue_time"])
-            target_time = _parse_iso_time(record["timestamp"])
-            horizon = target_time - issue_time
-            if horizon <= timedelta(0):
-                raise ValueError(
-                    f"invalid OOF chronology: issue={issue_time.isoformat()} "
-                    f"target={target_time.isoformat()}"
-                )
-            residuals = tuple(float(record[f"{name}_residual"]) for name in targets)
-            rows.append((issue_time, target_time, horizon, residuals))
-    return ResidualPanel(tuple(targets), tuple(rows))
 
 
 def _utc_datetime(value):
@@ -259,7 +229,7 @@ def run_corrected_real_backtest(spark, *, fold_count=1,
         _write_json(output_dir / "run_status.json", status)
         return status
 
-    panel = _load_residual_panel(output_dir / "oof_predictions.csv")
+    panel = load_residual_panel(output_dir / "oof_predictions.csv")
     methods = dict(METHODS)
     ranked = compare_methods(panel, seed=seed, n_samples=300, methods=methods)
     _write_json(output_dir / "uncertainty_method_comparison.json",
@@ -287,7 +257,7 @@ def run_corrected_real_backtest(spark, *, fold_count=1,
 
 # Databricks execution cell.
 # Change only FOLD_COUNT as we progress: 1 -> 3 -> 12.
-FOLD_COUNT = 1
+FOLD_COUNT = 3
 OUTPUT_DIR = (
     "/Workspace/Users/user32@swissgridlab.onmicrosoft.com/"
     "swissgrid_backtest_outputs/real_backtest"
@@ -309,4 +279,3 @@ status = run_corrected_real_backtest(
 print("BACKTEST STATUS:")
 print(json.dumps(status, indent=2, sort_keys=True, default=str))
 status
-

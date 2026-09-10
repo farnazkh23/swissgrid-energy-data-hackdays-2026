@@ -8,7 +8,7 @@ all happen on the attached Databricks runtime.  This file is intentionally not
 invoked by local development commands.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sys
@@ -35,10 +35,33 @@ GENERATION_FORBIDDEN_FIELDS = frozenset({
     "actual_generation", "scheduled_consumption", "actual", "current",
     "day_ahead", "intraday",
 })
+UTC = timezone.utc
+
+
+def _utc_datetime(value):
+    """Convert Spark's naive driver datetimes to the project's UTC contract."""
+    if not isinstance(value, datetime):
+        return value
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _normalize_spark_value(value):
+    if isinstance(value, datetime):
+        return _utc_datetime(value)
+    if isinstance(value, dict):
+        return {key: _normalize_spark_value(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return tuple(_normalize_spark_value(item) for item in value)
+    if isinstance(value, list):
+        return [_normalize_spark_value(item) for item in value]
+    return value
 
 
 def _rows(dataframe):
-    return tuple(row.asDict(recursive=True) for row in dataframe.toLocalIterator())
+    return tuple(_normalize_spark_value(row.asDict(recursive=True))
+                 for row in dataframe.toLocalIterator())
 
 
 def _filtered_table_rows(spark, table_name, start, end_exclusive):
@@ -72,7 +95,8 @@ def _fold_bounds(spark, net_dataframe, fold_count):
                       .orderBy("hour"))
     # Only the timestamp index is collected here; raw measurements are filtered
     # and aggregated before their separate, bounded collections below.
-    index = tuple(row["hour"] for row in complete_hours.toLocalIterator())
+    index = tuple(_utc_datetime(row["hour"])
+                  for row in complete_hours.toLocalIterator())
     folds = make_weekly_folds(index, max_folds=fold_count)
     if len(folds) != fold_count:
         raise ValueError(f"expected {fold_count} complete folds, got {len(folds)}")
@@ -161,11 +185,14 @@ def _score_one_fold(spark, samples, rows, output_dir):
 
 
 def run_corrected_real_backtest(spark, *, fold_count=1,
-                                output_dir="/dbfs/FileStore/swissgrid-forecaster/artifacts/real_backtest",
+                                output_dir=None,
                                 seed=20260910):
     """Run one, three, or twelve corrected folds; never invoke submission APIs."""
     if fold_count not in (1, 3, 12):
         raise ValueError("fold_count must be one of 1, 3, or 12")
+    if not output_dir:
+        raise ValueError("output_dir is required; pass a writable /Workspace/Users/... path")
+    spark.conf.set("spark.sql.session.timeZone", "UTC")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 

@@ -223,6 +223,8 @@ Contributions can proceed independently when they preserve the contracts:
 
 - [Databricks workspace inventory](docs/DATABRICKS_WORKSPACE_INVENTORY.md) —
   tables, coverage, PIT limitations, jobs, and workspace findings.
+- [Databricks local scoring runbook](docs/DATABRICKS_SCORING_RUNBOOK.md) —
+  official local scorer adapter, Delta writer, validation, and notebook commands.
 - [LSEG vs Databricks comparison](docs/LSEG_DATABRICKS_DATA_COMPARISON.md) —
   external inventory, overlaps, and acquisition gaps.
 - [G0/G1 foundation](docs/G0_G1_FOUNDATION.md) and

@@ -1,0 +1,109 @@
+{
+  "backtest": {
+    "forecast_horizon_hours": 1,
+    "oof": true,
+    "selected_model": "persistence",
+    "selection_metric": "pooled_mae",
+    "selection_note": "persistence (one-hour-ahead latest-value baseline) was lower-error than 24-hour seasonal persistence in this 12-fold window",
+    "source_rows_included": false,
+    "training_residuals_included": false,
+    "validation_window_hours": 168
+  },
+  "baseline_selection": {
+    "metric": "pooled_mae",
+    "persistence": 823.652109375,
+    "seasonal_persistence_24h": 1947.4331163194445,
+    "selected_model": "persistence"
+  },
+  "correlation_matrix": {
+    "CH": {
+      "CH": 1.0,
+      "DE": -0.4399513874345707,
+      "FR": -0.07959068050660809,
+      "IT": 0.0684414774899194
+    },
+    "DE": {
+      "CH": -0.4399513874345707,
+      "DE": 1.0,
+      "FR": -0.3039396786778348,
+      "IT": -0.24686509366427897
+    },
+    "FR": {
+      "CH": -0.07959068050660809,
+      "DE": -0.3039396786778348,
+      "FR": 1.0,
+      "IT": -0.19957325459629285
+    },
+    "IT": {
+      "CH": 0.0684414774899194,
+      "DE": -0.24686509366427897,
+      "FR": -0.19957325459629285,
+      "IT": 1.0
+    }
+  },
+  "date_range": {
+    "end": "2026-08-20T23:00:00Z",
+    "start": "2026-05-29T00:00:00Z"
+  },
+  "duplicated_timestamp_checks": {
+    "any_duplicates": false,
+    "duplicate_fold_timestamp_rows": 0,
+    "duplicate_timestamps": 0
+  },
+  "fold_ids": [
+    "fold_01",
+    "fold_02",
+    "fold_03",
+    "fold_04",
+    "fold_05",
+    "fold_06",
+    "fold_07",
+    "fold_08",
+    "fold_09",
+    "fold_10",
+    "fold_11",
+    "fold_12"
+  ],
+  "folds": 12,
+  "missing_value_checks": {
+    "any_missing": false,
+    "counts_by_column": {
+      "CH_actual": 0,
+      "CH_pred": 0,
+      "CH_residual": 0,
+      "DE_actual": 0,
+      "DE_pred": 0,
+      "DE_residual": 0,
+      "FR_actual": 0,
+      "FR_pred": 0,
+      "FR_residual": 0,
+      "IT_actual": 0,
+      "IT_pred": 0,
+      "IT_residual": 0,
+      "fold_id": 0,
+      "horizon": 0,
+      "issue_time": 0,
+      "timestamp": 0
+    }
+  },
+  "model_name": "persistence",
+  "residuals": {
+    "CH": {
+      "mean": -0.4204513888888896,
+      "std": 829.8304988980486
+    },
+    "DE": {
+      "mean": 1.6036706349206367,
+      "std": 1707.4668766151176
+    },
+    "FR": {
+      "mean": -0.2597718253968259,
+      "std": 1318.3462268936457
+    },
+    "IT": {
+      "mean": 0.47073412698412676,
+      "std": 664.9325401755239
+    }
+  },
+  "rows": 2016
+}

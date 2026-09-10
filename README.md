@@ -36,14 +36,14 @@ not infer them from column names or fixtures.
 
 The submission shape is confirmed:
 
-| Field | Requirement |
-| --- | --- |
-| Rows | Exactly 168 rows, in the challenge timestamp order |
-| Time field | One timestamp column |
+| Field           | Requirement                                                                                    |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| Rows            | Exactly 168 rows, in the challenge timestamp order                                             |
+| Time field      | One timestamp column                                                                           |
 | Forecast fields | Exactly four forecast columns; the final challenge-defined names are still under investigation |
-| Values | Each forecast field is `array<int>` |
-| Samples | Exactly 300 non-null integer samples in every array |
-| Submission | Use `edh2026.trigger_submission.submit_prediction_table` from Databricks |
+| Values          | Each forecast field is `array<int>`                                                            |
+| Samples         | Exactly 300 non-null integer samples in every array                                            |
+| Submission      | Use `edh2026.trigger_submission.submit_prediction_table` from Databricks                       |
 
 The four forecast-column names above are placeholders, not names to implement.
 The repository's `TargetContract` stays configurable for per-target semantics
@@ -105,12 +105,12 @@ the 66k+ row Databricks net-position history still needs assembly.
 The inspected workspace places challenge data in catalog `edh`, schema
 `input`, as 21 managed Delta tables. Coverage is AT/CH/DE/FR/IT.
 
-| Family | Available data |
-| --- | --- |
-| Network state | `edh.input.net_positions` for AT, CH, DE, FR, IT |
+| Family             | Available data                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| Network state      | `edh.input.net_positions` for AT, CH, DE, FR, IT                                              |
 | Directed exchanges | `edh.input.cross_border_exchanges` for AT-CH, AT-IT, CH-DE, CH-IT, DE-AT, FR-CH, FR-DE, FR-IT |
-| Capacity | `edh.input.ntc_month` for both CH↔AT, CH↔DE, CH↔FR, and CH↔IT directions |
-| Generation | 18 country/technology/total tables, with wind, solar, and total-generation coverage |
+| Capacity           | `edh.input.ntc_month` for both CH↔AT, CH↔DE, CH↔FR, and CH↔IT directions                      |
+| Generation         | 18 country/technology/total tables, with wind, solar, and total-generation coverage           |
 
 The generation tables cover: AT (onshore wind, solar, total); CH (onshore
 wind, solar, total); DE (offshore wind, onshore wind, solar, total); FR
@@ -260,6 +260,9 @@ Contributions can proceed independently when they preserve the contracts:
   rolling OOF, candidates, metrics, and holdout rules.
 - [G3 specialist contracts](docs/G3_SPECIALIST_CONTRACTS.md) — typed brief,
   registry, runner, ablation, and contribution boundaries.
+- [G4 probabilistic sampling](docs/G4_PROBABILISTIC_SAMPLING.md) — OOF-only
+  uncertainty/dependency models, deterministic joint sampling, calibration,
+  and weekly walk-forward sampler evaluation.
 - [Real-data handoff](docs/REAL_DATA_HANDOFF.md) and
   [real-data runbook](docs/TOMORROW_REAL_DATA_RUNBOOK.md) — preflight and
   baseline execution.

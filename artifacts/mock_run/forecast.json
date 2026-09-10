@@ -79,7 +79,7 @@
     -47.25759
   ],
   "sign_convention": "positive=import; negative=export",
-  "target_entity": "CH",
+  "target_entity": "AT",
   "target_name": "net_position",
   "target_time": "2026-01-10T01:00:00+00:00",
   "unit": "MW",

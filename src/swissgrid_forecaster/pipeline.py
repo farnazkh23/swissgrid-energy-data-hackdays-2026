@@ -293,7 +293,7 @@ def run_mock_pipeline(config: PipelineConfig, *, raw_root: str | Path | None = N
         warnings.append("stale source observations were retained and flagged")
     forecast = ForecastOutput.from_samples(
         forecast_id=forecast_id, issue_time=config.issue_time, horizon=config.horizon,
-        target_name="net_position", target_entity="CH", unit="MW",
+        target_name="net_position", target_entity="AT", unit="MW",
         selected_model_id=selected_id, selected_model_version=selected_version,
         feature_manifest_hash=features.registry.manifest_hash,
         training_data_manifest_hash=data_manifest(train), fit_cutoff=config.issue_time,

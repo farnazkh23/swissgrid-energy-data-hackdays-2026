@@ -10,7 +10,7 @@ from test_run_real_champion import build_file, source_config
 
 class ReadinessTests(unittest.TestCase):
     def config(self, **changes):
-        value = {"target_contract": {"target_name": "net", "target_entity": "CH", "unit": "MW",
+        value = {"target_contract": {"target_name": "net", "target_entity": "AT", "unit": "MW",
                   "sign_convention": "configured", "resolution_seconds": 3600,
                   "forecast_issue_time": "2026-01-01T19:00:00+00:00",
                   "target_valid_time": "2026-01-01T20:00:00+00:00", "horizon_seconds": 3600,

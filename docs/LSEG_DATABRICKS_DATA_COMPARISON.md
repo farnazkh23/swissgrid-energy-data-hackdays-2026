@@ -8,7 +8,7 @@ LSEG supplies the strongest external blocks for France/Italy day-ahead prices, I
 
 ## Workspace/file overview
 
-- Raw files inspected: **200** (100 data/document/image files and 100 `Zone.Identifier` sidecars).
+- Raw files inspected: **200** (100 non-sidecar files, of which 90 are analytical/reference artifacts and 10 are documentation/metadata files; plus 100 `Zone.Identifier` sidecars).
 - Exact duplicate content groups: **13**; duplicate paths remain catalogued but are not counted as new information.
 - Existing Databricks inventory: **21** managed Delta tables in `edh.input`, covering generation, net positions, exchanges and NTC.
 - The raw tree currently contains `CH_DA_RAW.xlsx` and `DE_DA_RAW.xlsx`, despite stale recovery notes saying they were absent; `DE_15M_RAW.xlsx` is still not present.

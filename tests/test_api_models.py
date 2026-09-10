@@ -26,7 +26,7 @@ class ApiModelTests(unittest.TestCase):
         self.assertEqual(payload["schema_version"], API_SCHEMA_VERSION)
         self.assertEqual(set(payload), {"schema_version", "forecast", "probability",
                                         "visualization", "model", "evidence", "state"})
-        self.assertEqual(payload["forecast"]["target"], {"name": "net_position", "entity": "CH"})
+        self.assertEqual(payload["forecast"]["target"], {"name": "net_position", "entity": "AT"})
         self.assertEqual(payload["model"]["selected_champion"], "seasonal_persistence")
         self.assertEqual(payload["probability"]["probability_import"] +
                          payload["probability"]["probability_export"], 1.0)

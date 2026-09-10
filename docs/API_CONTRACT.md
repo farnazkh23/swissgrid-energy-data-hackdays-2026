@@ -37,7 +37,7 @@ require it.
     "issue_time": "2026-01-10T00:00:00+00:00",
     "target_time": "2026-01-10T01:00:00+00:00",
     "horizon": "1:00:00",
-    "target": {"name": "net_position", "entity": "CH"},
+    "target": {"name": "net_position", "entity": "AT"},
     "unit": "MW",
     "sign_convention": "positive=import; negative=export"
   },
@@ -78,6 +78,12 @@ The probability fields are empirical values already persisted in
 Histogram bins and all interval values are read from `histogram.json`, whose
 probabilities must total one. OOF metrics come from the selected candidate in
 `scoreboard.json` and are `null` if that artifact has no metrics.
+
+The four scored forecast-output targets are exactly AT, DE, FR, IT in that
+canonical order (see `swissgrid_forecaster.target_contract.TARGETS`). CH is an
+input/context country only and must never appear as a served forecast-output
+entity; any Switzerland aggregate shown by a frontend is derived context, not a
+scored target.
 
 `state` is one of `NORMAL`, `FALLBACK`, `ABSTAIN`, or `DEGRADED`. Explicit
 abstention takes precedence over fallback. Fallback takes precedence over

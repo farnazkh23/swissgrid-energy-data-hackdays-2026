@@ -43,9 +43,9 @@ def build_file(directory, *, pit=True):
 
 def champion_config():
     final_issue = T + timedelta(hours=19)
-    target = TargetContract("explicit-real-target", "CH", "MW", "configured sign", timedelta(hours=1),
+    target = TargetContract("explicit-real-target", "AT", "MW", "configured sign", timedelta(hours=1),
                             final_issue, final_issue + timedelta(hours=1), timedelta(hours=1),
-                            "identity", "known_at <= target valid time", ForecastType.POINT, ("mae",), country="CH")
+                            "identity", "known_at <= target valid time", ForecastType.POINT, ("mae",), country="AT")
     plan = RollingOrigin(T + timedelta(hours=8), final_issue, timedelta(hours=8), timedelta(hours=3),
                          timedelta(hours=1), timedelta(hours=5), purge=timedelta(hours=1), embargo=timedelta(hours=1))
     return RealChampionConfig(target, "net", "net-*", tuple(T + timedelta(hours=i) for i in range(1, 20)),

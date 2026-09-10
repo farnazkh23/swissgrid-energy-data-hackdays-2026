@@ -102,6 +102,31 @@ calibration and holdout rows are not supplied to candidate models. Candidate
 ineligibility and unavailable optional dependencies are recorded rather than
 given fabricated scores.
 
+## Scored target set and probability handoff
+
+The four scored forecast outputs are exactly `TARGETS = ("AT", "DE", "FR", "IT")`
+(`swissgrid_forecaster.target_contract`); CH is input/context only. A
+production real run therefore performs one audited Champion run per scored
+target (per-target `TargetContract` and source/record identity), then assembles
+the probability handoff with `swissgrid_forecaster.oof_handoff`:
+
+```python
+from swissgrid_forecaster.oof_handoff import build_oof_handoff, write_oof_handoff
+
+rows = build_oof_handoff(oof_by_target, champions_by_target)  # per-target Champions
+write_oof_handoff(rows, champions_by_target, "artifacts/real_backtest")
+```
+
+`oof_predictions.csv` columns are exactly `timestamp`, `fold_id`, `horizon`,
+`issue_time`, then `AT_actual/AT_pred/AT_residual`, `DE_*`, `FR_*`, `IT_*` in
+that stable order; the residual vector handed to the Gaussian / Student-t /
+bootstrap teammate is `[AT_residual, DE_residual, FR_residual, IT_residual]`
+with `residual = actual - prediction` from true OOF predictions only.
+`oof_residual_summary.json` records the target order, per-target Champions, and
+per-target residual statistics. The 66k+ row net-position history lives in
+Databricks (`edh.input.net_positions`); the handoff is generated after the
+per-target real runs complete against that export.
+
 Before tomorrow’s run, confirm the source license, timezone/DST convention,
 revision lineage, publication/receipt clocks, unit semantics, target meaning,
 feature horizon availability, and the split/holdout dates. Real predictive

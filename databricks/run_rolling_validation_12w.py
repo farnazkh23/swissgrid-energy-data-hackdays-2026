@@ -25,7 +25,7 @@ from swissgrid_forecaster.real_modeling_v1 import LSEGFeatures, _hourly_table, _
 from swissgrid_forecaster.time_contract import organizer_timestamp, source_query_bounds
 from swissgrid_forecaster.rolling_validation import (
     HOUR, POINT_MODELS, TRAIN_HOURS, VALIDATION_WEEKS, WARM_START_WEEKS, history_requirements,
-    build_validation_folds, require_history, run_rolling_validation,
+    build_warm_start_folds, build_validation_folds, require_history, run_rolling_validation,
     validate_validation_folds,
 )
 from swissgrid_forecaster.target_contract import INPUT_COUNTRIES, TARGETS
@@ -138,18 +138,15 @@ def run_12_week_validation(spark, *, output_dir):
     print("  Week 1 issue time:", requirements["week1_issue_time"])
     print("  historical warm-start weeks:", requirements["warm_start_weeks"])
     print("  historical warm-start hours:", requirements["warm_start_hours"])
+    warm_folds = build_warm_start_folds(first, hourly_targets, weeks=WARM_START_WEEKS)
     available_hours = set(hourly_targets)
     week1_train = _hour_range(requirements["week1_train_start"], requirements["week1_issue_time"])
     week1_forecast = _hour_range(first, first + timedelta(hours=167))
     _print_gap_report("Week 1 train", week1_train, available_hours)
     _print_gap_report("Week 1 forecast", week1_forecast, available_hours)
-    for warm_index in range(requirements["warm_start_weeks"]):
-        warm_start = requirements["warm_forecast_start"] + timedelta(hours=warm_index * 168)
-        warm_issue = warm_start - timedelta(hours=1)
-        warm_train = _hour_range(warm_issue - timedelta(hours=TRAIN_HOURS - 1), warm_issue)
-        warm_forecast = _hour_range(warm_start, warm_start + timedelta(hours=167))
-        _print_gap_report(f"Warm week {warm_index + 1} train", warm_train, available_hours)
-        _print_gap_report(f"Warm week {warm_index + 1} forecast", warm_forecast, available_hours)
+    for warm_index, fold in enumerate(warm_folds):
+        _print_gap_report(f"Warm week {warm_index + 1} train", fold.train_timestamps, available_hours)
+        _print_gap_report(f"Warm week {warm_index + 1} forecast", fold.forecast_timestamps, available_hours)
     require_history(hourly_targets, requirements)
     realizations = {row["timestamp"]: {target: float(row[f"{target}_actual"]) for target in TARGETS} for row in validation}
     tables = {
@@ -196,8 +193,7 @@ def run_preflight(spark, *, output_dir):
     _print_gap_report("Week 1 forecast", week1_forecast, set(hourly_targets))
     validation_folds = build_validation_folds(tuple(row["timestamp"] for row in validation), hourly_targets)
     warm_start = requirements["warm_forecast_start"]
-    warm_timestamps = tuple(warm_start + index * HOUR for index in range(WARM_START_WEEKS * 168))
-    warm_folds = build_validation_folds(warm_timestamps, hourly_targets, weeks=WARM_START_WEEKS)
+    warm_folds = build_warm_start_folds(first, hourly_targets, weeks=WARM_START_WEEKS)
     validate_validation_folds((*warm_folds, *validation_folds))
     print("Preflight folds: warm", len(warm_folds), "validation", len(validation_folds), "holdout week 12")
     cross = _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive)
@@ -234,8 +230,7 @@ def run_smoke_test(spark, *, output_dir):
     net = _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(query_start)) & (F.col("Zeitstempel") < F.lit(query_end))))
     hourly_targets = build_hourly_targets(net)
     require_history(hourly_targets, requirements)
-    warm_timestamps = tuple(requirements["warm_forecast_start"] + index * HOUR for index in range(WARM_START_WEEKS * 168))
-    warm_folds = build_validation_folds(warm_timestamps, hourly_targets, weeks=WARM_START_WEEKS)
+    warm_folds = build_warm_start_folds(first, hourly_targets, weeks=WARM_START_WEEKS)
     affected_index, affected = next(((index, fold) for index, fold in enumerate(warm_folds) if any(timestamp - timedelta(hours=168) not in hourly_targets for timestamp in fold.forecast_timestamps)), (len(warm_folds) - 1, warm_folds[-1]))
     cross = _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive)
     ntc = _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive)

@@ -92,33 +92,45 @@ def build_validation_folds(
         raise ValueError(f"expected {weeks * WEEK_HOURS} validation timestamps")
     if len(set(stamps)) != len(stamps) or tuple(sorted(stamps)) != stamps:
         raise ValueError("validation timestamps must be unique and chronological")
-    if any(right - left != HOUR for left, right in zip(stamps, stamps[1:])):
-        raise ValueError("validation timestamps must be consecutive hourly rows")
-    available = set(available_timestamps)
+    if any(right <= left for left, right in zip(stamps, stamps[1:])):
+        raise ValueError("validation timestamps must be strictly chronological")
+    available = tuple(sorted(set(available_timestamps)))
+    available_set = set(available)
     folds = []
     for index in range(weeks):
         forecast = stamps[index * WEEK_HOURS:(index + 1) * WEEK_HOURS]
-        issue = forecast[0] - HOUR
-        required_train = tuple(issue - timedelta(hours=train_hours - 1 - offset)
-                               for offset in range(train_hours))
-        missing_forecast = tuple(timestamp for timestamp in forecast if timestamp not in available)
+        forecast_index = available.index(forecast[0]) if forecast[0] in available_set else -1
+        missing_forecast = tuple(timestamp for timestamp in forecast if timestamp not in available_set)
         if missing_forecast:
             raise ValueError(
                 f"fold {index + 1} has unavailable forecast timestamps: "
                 + ", ".join(_iso(timestamp) for timestamp in missing_forecast[:20])
             )
-        # A genuine historical source gap may remove one causal training row.
-        # Keep the available observations rather than inventing a label; future
-        # validation rows remain strict and complete above.
-        train = tuple(timestamp for timestamp in required_train if timestamp in available)
+        # Train on the previous observed organizer keys.  This is position-based
+        # intentionally: a DST wall-clock gap is not an artificial model row.
+        train = tuple(available[max(0, forecast_index - train_hours):forecast_index])
         if not train:
             raise ValueError(f"fold {index + 1} has no available causal training timestamps")
+        issue = train[-1]
         if issue >= forecast[0] or any(issue >= timestamp for timestamp in forecast):
             raise ValueError(f"fold {index + 1} violates fixed-origin chronology")
         folds.append(WeeklyFold(f"validation_week_{index + 1:02d}", train, forecast))
     result = tuple(folds)
     validate_validation_folds(result)
     return result
+
+
+def build_warm_start_folds(first_validation_start, available_timestamps, *, weeks=WARM_START_WEEKS,
+                           train_hours=TRAIN_HOURS) -> tuple[WeeklyFold, ...]:
+    """Build warm folds from observed keys strictly before the validation issue key."""
+    available = tuple(sorted(set(available_timestamps)))
+    first_index = available.index(first_validation_start)
+    issue_index = first_index - 1
+    start = issue_index - weeks * WEEK_HOURS
+    if start < 0:
+        raise ValueError("insufficient observed keys for warm-start folds")
+    return build_validation_folds(available[start:issue_index], available,
+                                  weeks=weeks, train_hours=train_hours)
 
 
 def validate_validation_folds(folds) -> tuple[WeeklyFold, ...]:
@@ -131,9 +143,8 @@ def validate_validation_folds(folds) -> tuple[WeeklyFold, ...]:
             raise ValueError(f"fold {index} must contain exactly 168 forecast rows")
         if fold.issue_time >= fold.forecast_start:
             raise ValueError(f"fold {index} issue time must precede forecast start")
-        if any(timestamp - fold.issue_time != HOUR * (offset + 1)
-               for offset, timestamp in enumerate(fold.forecast_timestamps)):
-            raise ValueError(f"fold {index} horizons must be exactly 1..168")
+        if any(right <= left for left, right in zip(fold.forecast_timestamps, fold.forecast_timestamps[1:])):
+            raise ValueError(f"fold {index} forecast timestamps are not ordered observed keys")
         if any(timestamp > fold.issue_time for timestamp in fold.train_timestamps):
             raise ValueError(f"fold {index} trains on data after its issue time")
         if index > 1 and fold.forecast_start <= folds[index - 2].forecast_timestamps[-1]:
@@ -293,10 +304,8 @@ def run_rolling_validation(*, hourly_targets, realizations, output_dir=None,
     folds = build_validation_folds(validation_timestamps, hourly_targets, weeks=validation_weeks)
     warm_folds = ()
     if warm_start_weeks:
-        warm_timestamps = tuple(
-            folds[0].forecast_start - timedelta(hours=WEEK_HOURS * warm_start_weeks + 1)
-            + index * HOUR for index in range(WEEK_HOURS * warm_start_weeks))
-        warm_folds = build_validation_folds(warm_timestamps, hourly_targets, weeks=warm_start_weeks)
+        warm_folds = build_warm_start_folds(folds[0].forecast_start, hourly_targets,
+                                            weeks=warm_start_weeks)
     all_folds = tuple(warm_folds) + tuple(folds)
     all_actuals = dict(realizations)
     for fold in warm_folds:

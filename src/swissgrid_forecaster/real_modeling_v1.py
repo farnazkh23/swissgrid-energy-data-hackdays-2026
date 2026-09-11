@@ -371,7 +371,7 @@ class WeeklyFold:
     @property
     def issue_time(self) -> datetime:
         """The single issue point for the unseen forecast week."""
-        return self.forecast_start - timedelta(hours=1)
+        return self.train_timestamps[-1]
 
     def manifest(self) -> dict:
         return {"fold_id": self.fold_id, "train_rows": len(self.train_timestamps),
@@ -379,7 +379,7 @@ class WeeklyFold:
                 "train_start": self.train_timestamps[0].isoformat(), "train_end": self.train_timestamps[-1].isoformat(),
                 "issue_time": self.issue_time.isoformat(),
                 "forecast_start": self.forecast_timestamps[0].isoformat(), "forecast_end": self.forecast_timestamps[-1].isoformat(),
-                "leakage_check": "train timestamps precede forecast_start"}
+                          "leakage_check": "train timestamps are observed keys at or before issue_time"}
 
 
 def make_weekly_folds(timestamps: Iterable[datetime], *, train_hours: int = 672,
@@ -675,7 +675,7 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
                         {"fold_id": fold.fold_id, "row_id": f"{fold.fold_id}:{stamp.isoformat()}",
                          "timestamp": stamp.isoformat(),
                          "issue_time": fold.issue_time.isoformat(),
-                         "horizon": int((stamp - fold.issue_time).total_seconds() / 3600),
+                          "horizon": index + 1,
                           "model": model_name, "target": target, "actual": actual,
                           "pred": prediction,
                           "seasonal_fallback": (fallback_methods[index] if fallback_methods else None)}

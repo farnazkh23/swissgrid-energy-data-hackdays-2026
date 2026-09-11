@@ -10,10 +10,10 @@ Challenge data and the submission job remain in the Databricks workspace.
 We must produce a one-week forecast submission for four challenge-defined
 targets. The target identities are now resolved: the challenge input provides
 five country net positions (AT, CH, DE, FR, IT), and the four scored forecast
-outputs are the net positions of Switzerland's four neighbouring countries:
+outputs are the organizer-defined positional targets CH, DE, FR, and IT:
 
 ```text
-TARGETS = ("AT", "DE", "FR", "IT")
+TARGETS = ("CH", "DE", "FR", "IT")
 ```
 
 This order is canonical and stable repo-wide, defined in
@@ -22,13 +22,13 @@ realizations positionally, so the submission mapping is fixed and asserted
 before any write:
 
 ```text
-target_0 -> AT
+target_0 -> CH
 target_1 -> DE
 target_2 -> FR
 target_3 -> IT
 ```
 
-**CH is not a scored forecast output.** It remains valid as an input feature
+**AT is not a scored forecast output.** It remains valid as an input feature
 and system-state/context country (and as a derived, clearly-labeled frontend
 aggregate). Units, sign conventions, issue schedule, and aggregation rules are
 still confirmed only by the Databricks challenge documentation/data owner; do
@@ -87,7 +87,7 @@ The implemented modules are deliberately fail-closed where target meaning or PIT
 - **Real-data handoff/audits:** `real_dataset_loader` reads CSV/JSON and optional Parquet; `real_source_adapter` maps provider fields; `data_quality`, `data_audit`, `feature_audit`, and `readiness` check missingness, cadence, duplicates, coverage, clocks, freshness, PIT risk, and feature evidence.
 - **Features/evaluation:** `feature_registry` and `fold_features` provide versioned fold-local transforms. `splits` implements rolling origins with purge, embargo, label delay, and holdout isolation; `oof`, `metrics`, and `baseline_runner` produce/check OOF evidence.
 - **Champion candidates:** `champion` contains persistence, seasonal persistence, historical-conditional empirical samples, and optional lazy scikit-learn Ridge/quantile-boosting adapters. Selection is an OOF recommendation; there is no promotion mechanism.
-- **Runs/acceptance:** `run_real_champion` performs the audited real-data handoff; `run_manifest` records content-addressed identity; `acceptance` fails closed on missing PIT evidence, provenance, or hashes. `submission` builds/validates the positional 168x4x300 submission table (0->AT, 1->DE, 2->FR, 3->IT) and `oof_handoff` exports the per-target-Champion OOF residual handoff (`[AT, DE, FR, IT]` residual vector) for the probabilistic teammate.
+- **Runs/acceptance:** `run_real_champion` performs the audited real-data handoff; `run_manifest` records content-addressed identity; `acceptance` fails closed on missing PIT evidence, provenance, or hashes. `submission` builds/validates the positional 168x4x300 submission table (0->CH, 1->DE, 2->FR, 3->IT) and `oof_handoff` exports the per-target-Champion OOF residual handoff (`[CH, DE, FR, IT]` residual vector) for the probabilistic teammate.
 - **Specialist boundary:** `specialist_contracts`, `specialist_registry`, and `specialist_runner` validate typed briefs; `ablation` and `contribution` record OOF comparison evidence. These are interfaces, not specialist science.
 - **Artifacts/serving:** `forecast_output`, `histogram`, `api_models`, `api_schema`, `artifact_repository`, `forecast_service`, `health`, and optional `api` validate or expose persisted artifacts without refitting.
 - **Development fixture:** `mock_sources`, `pipeline`, and `dry_run` provide a deterministic synthetic end-to-end run for contract/integration testing.

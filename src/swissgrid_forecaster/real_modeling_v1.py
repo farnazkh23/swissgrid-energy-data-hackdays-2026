@@ -28,7 +28,7 @@ from xml.etree import ElementTree
 from zipfile import ZipFile
 from zoneinfo import ZoneInfo
 
-from .target_contract import TARGETS
+from .target_contract import CONTEXT_ONLY_COUNTRIES, TARGETS
 
 
 UTC = timezone.utc
@@ -433,6 +433,10 @@ def build_features(*, target_history: Mapping[datetime, Mapping[str, float]],
         add(f"target_{target}_rolling_std_24h", sqrt(mean((value - mean(prior)) ** 2 for value in prior)) if all(value is not None for value in prior) else None)
         one = _lookup(series, stamp, issue, 1); two = _lookup(series, stamp, issue, 2)
         add(f"target_{target}_ramp_1h", one - two if one is not None and two is not None else None)
+    for country in CONTEXT_ONLY_COUNTRIES:
+        series = {time: row[country] for time, row in target_history.items() if country in row}
+        for lag in (1, 24, 168):
+            add(f"context_{country}_lag_{lag}h", _lookup(series, stamp, issue, lag))
     for table_name in sorted(db_tables):
         table = db_tables.get(table_name, {})
         columns = sorted((db_series or {}).get(table_name, {})) or sorted({column for row in table.values() for column in row})

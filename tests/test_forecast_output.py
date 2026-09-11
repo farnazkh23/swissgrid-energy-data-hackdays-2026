@@ -9,7 +9,7 @@ class ForecastOutputTests(unittest.TestCase):
     def output(self):
         return ForecastOutput.from_samples(
             forecast_id="f1", issue_time=datetime(2026, 1, 1, tzinfo=timezone.utc),
-            horizon=timedelta(hours=1), target_name="net_position", target_entity="AT",
+            horizon=timedelta(hours=1), target_name="net_position", target_entity="CH",
             unit="MW", selected_model_id="persistence", selected_model_version="a" * 64,
             feature_manifest_hash="b" * 64, training_data_manifest_hash="c" * 64,
             fit_cutoff=datetime(2026, 1, 1, tzinfo=timezone.utc), samples=(-2, -1, 1, 3),
@@ -34,4 +34,3 @@ class ForecastOutputTests(unittest.TestCase):
     def test_probabilities_require_samples(self):
         with self.assertRaises(ValueError):
             probabilities_from_samples(())
-

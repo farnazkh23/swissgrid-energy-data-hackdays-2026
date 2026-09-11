@@ -11,45 +11,44 @@ from .availability import nonempty, utc
 # Canonical challenge forecast-output target contract.
 #
 # The challenge provides five country net positions (AT, CH, DE, FR, IT) as
-# inputs and asks for exactly four forecast arrays: the net positions of
-# Switzerland's four neighbouring countries. Switzerland (CH) is NOT a scored
-# forecast output; it remains valid as an input feature / system-state
-# context country.
+# inputs. The organizer's Challenge-4 realization and probability tables score
+# exactly four positional outputs: CH, DE, FR, IT. AT remains an input/context
+# country and is never a scored forecast output.
 #
 # The order below is canonical and stable repo-wide because the official
 # evaluator maps realizations POSITIONALLY:
 #
-#     submission target_0 -> AT
+#     submission target_0 -> CH
 #     submission target_1 -> DE
 #     submission target_2 -> FR
 #     submission target_3 -> IT
-TARGETS: tuple[str, ...] = ("AT", "DE", "FR", "IT")
+TARGETS: tuple[str, ...] = ("CH", "DE", "FR", "IT")
 OUTPUT_TARGETS: tuple[str, ...] = TARGETS
 TARGET_POSITIONS: dict[str, int] = {target: index for index, target in enumerate(TARGETS)}
 POSITION_TARGETS: tuple[str, ...] = TARGETS
-# Countries available as model inputs / context. CH is context-only and must
+# Countries available as model inputs / context. AT is context-only and must
 # never be selected as a forecast-output target.
 INPUT_COUNTRIES: tuple[str, ...] = ("AT", "CH", "DE", "FR", "IT")
-CONTEXT_ONLY_COUNTRIES: tuple[str, ...] = ("CH",)
+CONTEXT_ONLY_COUNTRIES: tuple[str, ...] = ("AT",)
 
 
 class InvalidOutputTargets(ValueError):
-    """A target set violates the canonical AT/DE/FR/IT output contract."""
+    """A target set violates the canonical CH/DE/FR/IT output contract."""
 
 
 def validate_output_targets(targets) -> tuple[str, ...]:
     """Validate a forecast-output target sequence against the canonical contract.
 
-    Rejects any sequence that omits AT, includes CH, adds or drops a target,
+    Rejects any sequence that omits CH, includes AT, adds or drops a target,
     duplicates a target, or reorders the canonical positional order.
     """
     if isinstance(targets, str) or not hasattr(targets, "__iter__"):
         raise InvalidOutputTargets("output targets must be an ordered sequence")
     sequence = tuple(targets)
-    if "CH" in sequence:
-        raise InvalidOutputTargets("CH is an input/context country, not a forecast output target")
-    if "AT" not in sequence:
-        raise InvalidOutputTargets("AT is a required forecast output target")
+    if "AT" in sequence:
+        raise InvalidOutputTargets("AT is an input/context country, not a forecast output target")
+    if "CH" not in sequence:
+        raise InvalidOutputTargets("CH is a required forecast output target")
     if sequence != TARGETS:
         detail = "/".join(sequence) if sequence else "empty sequence"
         raise InvalidOutputTargets(
@@ -64,7 +63,7 @@ def require_output_target(entity: str) -> str:
     if entity not in TARGETS:
         raise InvalidOutputTargets(
             f"target entity {entity!r} is not a scored forecast output target "
-            f"(expected one of {', '.join(TARGETS)}); CH is input/context only")
+            f"(expected one of {', '.join(TARGETS)}); AT is input/context only")
     return entity
 
 

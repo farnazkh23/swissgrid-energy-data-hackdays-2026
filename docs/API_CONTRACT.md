@@ -79,10 +79,10 @@ Histogram bins and all interval values are read from `histogram.json`, whose
 probabilities must total one. OOF metrics come from the selected candidate in
 `scoreboard.json` and are `null` if that artifact has no metrics.
 
-The four scored forecast-output targets are exactly AT, DE, FR, IT in that
-canonical order (see `swissgrid_forecaster.target_contract.TARGETS`). CH is an
+The four scored forecast-output targets are exactly CH, DE, FR, IT in that
+canonical order (see `swissgrid_forecaster.target_contract.TARGETS`). AT is an
 input/context country only and must never appear as a served forecast-output
-entity; any Switzerland aggregate shown by a frontend is derived context, not a
+entity; any Austria context shown by a frontend is derived context, not a
 scored target.
 
 `state` is one of `NORMAL`, `FALLBACK`, `ABSTAIN`, or `DEGRADED`. Explicit

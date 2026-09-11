@@ -3,7 +3,7 @@
 Builds the challenge OOF handoff with one row per (fold, issue time) and the
 four-dimensional residual vector ordered exactly as
 
-    [AT_residual, DE_residual, FR_residual, IT_residual]
+    [CH_residual, DE_residual, FR_residual, IT_residual]
 
 from true out-of-fold predictions only. If the best Champion differs by
 target, the per-target Champion predictions are used. The written artifacts
@@ -20,7 +20,7 @@ from .target_contract import InvalidOutputTargets, TARGETS, validate_output_targ
 
 OOF_HANDOFF_SCHEMA = "oof-handoff.v1"
 OOF_HANDOFF_COLUMNS = ("timestamp", "fold_id", "horizon", "issue_time",
-                       "AT_actual", "AT_pred", "AT_residual",
+                       "CH_actual", "CH_pred", "CH_residual",
                        "DE_actual", "DE_pred", "DE_residual",
                        "FR_actual", "FR_pred", "FR_residual",
                        "IT_actual", "IT_pred", "IT_residual")
@@ -48,14 +48,14 @@ def _point_prediction(record):
 def build_oof_handoff(oof_by_target, champions_by_target):
     """Build handoff rows from per-target OOF results and per-target Champions.
 
-    ``oof_by_target`` maps each scored entity (exactly AT, DE, FR, IT) to a
+    ``oof_by_target`` maps each scored entity (exactly CH, DE, FR, IT) to a
     validated ``OOFResult``; ``champions_by_target`` maps the same entities to
     their per-target Champion ``(model_id, model_version)``.
     """
     if not isinstance(oof_by_target, dict) or not isinstance(champions_by_target, dict):
         raise ValueError("oof_by_target and champions_by_target must be mappings keyed by target")
-    if "CH" in oof_by_target or "CH" in champions_by_target:
-        raise InvalidOutputTargets("CH is an input/context country and has no OOF forecast output")
+    if "AT" in oof_by_target or "AT" in champions_by_target:
+        raise InvalidOutputTargets("AT is an input/context country and has no OOF forecast output")
     if set(oof_by_target) != set(TARGETS) or set(champions_by_target) != set(TARGETS):
         raise InvalidOutputTargets(
             "OOF handoff requires exactly the four scored targets " + ", ".join(TARGETS))
@@ -109,7 +109,7 @@ def build_oof_handoff(oof_by_target, champions_by_target):
 
 
 def oof_handoff_column_order(rows):
-    """Assert the persisted handoff preserves the exact AT/DE/FR/IT columns."""
+    """Assert the persisted handoff preserves the exact CH/DE/FR/IT columns."""
     if not rows:
         raise ValueError("empty OOF handoff")
     for row in rows:
@@ -120,8 +120,8 @@ def oof_handoff_column_order(rows):
 
 def residual_summary(rows, champions_by_target):
     """Per-target residual statistics plus the documented target order."""
-    if "CH" in champions_by_target:
-        raise InvalidOutputTargets("CH must not appear as an OOF handoff target")
+    if "AT" in champions_by_target:
+        raise InvalidOutputTargets("AT must not appear as an OOF handoff target")
     if set(champions_by_target) != set(TARGETS):
         raise InvalidOutputTargets("residual summary requires champions for exactly " + ", ".join(TARGETS))
     columns = oof_handoff_column_order(rows)

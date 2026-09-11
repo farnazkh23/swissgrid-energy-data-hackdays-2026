@@ -4,12 +4,12 @@ The official evaluator maps realizations positionally, so column names alone
 do not protect us. The internal mapping is fixed and asserted before any
 write:
 
-    target_0 -> AT
+    target_0 -> CH
     target_1 -> DE
     target_2 -> FR
     target_3 -> IT
 
-CH is never a submission target; it may only enter as an input/context
+AT is never a submission target; it may only enter as an input/context
 feature. Every builder call re-asserts the canonical target order from
 ``swissgrid_forecaster.target_contract``.
 """
@@ -60,15 +60,15 @@ def _normalize_timestamps(timestamps):
 def build_submission_table(series_by_target, timestamps):
     """Build the positional submission rows from per-target sample series.
 
-    ``series_by_target`` maps each scored entity (exactly AT, DE, FR, IT) to a
+    ``series_by_target`` maps each scored entity (exactly CH, DE, FR, IT) to a
     sequence of 168 per-hour sample sequences of 300 values each. Floating
     point samples are rounded to integers because the challenge column type
     is ``array<int>``.
     """
     if not isinstance(series_by_target, dict):
         raise ValueError("series_by_target must be a mapping of entity -> sample series")
-    if "CH" in series_by_target:
-        raise InvalidOutputTargets("CH is an input/context country, not a submission target")
+    if "AT" in series_by_target:
+        raise InvalidOutputTargets("AT is an input/context country, not a submission target")
     if set(series_by_target) != set(TARGETS):
         raise InvalidOutputTargets(
             "submission requires exactly the four scored targets " + ", ".join(TARGETS) +
@@ -97,7 +97,7 @@ def validate_submission_table(rows):
     """Assert an already-built submission table preserves the target contract.
 
     Returns the documented positional mapping; raises on any violation of the
-    168 x 4 x 300 integer contract or the AT/DE/FR/IT order.
+    168 x 4 x 300 integer contract or the CH/DE/FR/IT order.
     """
     if rows is None or hasattr(rows, "keys") or not hasattr(rows, "__iter__"):
         raise ValueError("submission table must be an ordered sequence of rows")

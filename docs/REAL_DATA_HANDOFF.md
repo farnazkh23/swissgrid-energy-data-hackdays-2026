@@ -104,8 +104,8 @@ given fabricated scores.
 
 ## Scored target set and probability handoff
 
-The four scored forecast outputs are exactly `TARGETS = ("AT", "DE", "FR", "IT")`
-(`swissgrid_forecaster.target_contract`); CH is input/context only. A
+The four scored forecast outputs are exactly `TARGETS = ("CH", "DE", "FR", "IT")`
+(`swissgrid_forecaster.target_contract`); AT is input/context only. A
 production real run therefore performs one audited Champion run per scored
 target (per-target `TargetContract` and source/record identity), then assembles
 the probability handoff with `swissgrid_forecaster.oof_handoff`:
@@ -118,9 +118,9 @@ write_oof_handoff(rows, champions_by_target, "artifacts/real_backtest")
 ```
 
 `oof_predictions.csv` columns are exactly `timestamp`, `fold_id`, `horizon`,
-`issue_time`, then `AT_actual/AT_pred/AT_residual`, `DE_*`, `FR_*`, `IT_*` in
+`issue_time`, then `CH_actual/CH_pred/CH_residual`, `DE_*`, `FR_*`, `IT_*` in
 that stable order; the residual vector handed to the Gaussian / Student-t /
-bootstrap teammate is `[AT_residual, DE_residual, FR_residual, IT_residual]`
+bootstrap teammate is `[CH_residual, DE_residual, FR_residual, IT_residual]`
 with `residual = actual - prediction` from true OOF predictions only.
 `oof_residual_summary.json` records the target order, per-target Champions, and
 per-target residual statistics. The 66k+ row net-position history lives in

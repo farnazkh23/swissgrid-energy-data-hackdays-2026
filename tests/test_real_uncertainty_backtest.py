@@ -3,7 +3,7 @@ import csv
 from pathlib import Path
 
 from swissgrid_forecaster.real_uncertainty_backtest import (
-    TARGET_NAMES, compare_methods, fit_calibrated_champion,
+    METHODS, TARGET_NAMES, compare_methods, fit_calibrated_champion,
     load_actuals, load_point_forecasts, load_residual_panel,
     sample_folds, score_samples_against_actuals,
 )
@@ -22,7 +22,7 @@ def _artifact_header():
 
 
 _header = _artifact_header()
-ARTIFACT_READY = CSV_PATH.is_file() and "AT_residual" in _header and "CH_residual" not in _header
+ARTIFACT_READY = CSV_PATH.is_file() and "CH_residual" in _header and "AT_residual" not in _header
 
 
 def small_panel(weeks: int = 4) -> ResidualPanel:
@@ -56,8 +56,7 @@ class CompareMethodsOnRealDataTests(unittest.TestCase):
     def test_all_four_methods_evaluate_and_rank(self):
         panel = small_panel(4)
         ranked = compare_methods(panel, seed=1, n_samples=20, week_hours=168)
-        self.assertEqual({row.method for row in ranked},
-                         {"independent_gaussian", "correlated_gaussian", "student_t", "empirical_bootstrap"})
+        self.assertEqual({row.method for row in ranked}, set(METHODS))
         self.assertEqual(list(ranked), sorted(ranked, key=lambda r: r.mean_score))
         for row in ranked:
             self.assertGreater(len(row.weekly_scores), 0)

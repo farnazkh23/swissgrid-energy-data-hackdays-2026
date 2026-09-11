@@ -1,10 +1,9 @@
-"""Regression tests: the scored forecast-output target contract is AT/DE/FR/IT.
+"""Regression tests: the scored forecast-output target contract is CH/DE/FR/IT.
 
-These tests exist to prevent the historical mistake of modelling CH as one of
-the four forecast outputs from ever returning. CH is an input/context country
-only. The canonical order is positional because the official evaluator maps
-realizations positionally (target_0->AT, target_1->DE, target_2->FR,
-target_3->IT).
+These tests prevent the historical mistake of modelling AT as one of the four
+forecast outputs. AT is input/context only. The canonical order is positional
+because the official evaluator maps realizations positionally
+(target_0->CH, target_1->DE, target_2->FR, target_3->IT).
 """
 import csv
 import json
@@ -32,45 +31,45 @@ ISSUE = datetime(2026, 1, 10, tzinfo=timezone.utc)
 
 
 class CanonicalTargetContractTests(unittest.TestCase):
-    def test_targets_are_exactly_at_de_fr_it_in_order(self):
-        self.assertEqual(TARGETS, ("AT", "DE", "FR", "IT"))
+    def test_targets_are_exactly_ch_de_fr_it_in_order(self):
+        self.assertEqual(TARGETS, ("CH", "DE", "FR", "IT"))
         self.assertIs(OUTPUT_TARGETS, TARGETS)
 
-    def test_ch_is_not_a_forecast_output_and_at_is_required(self):
-        self.assertNotIn("CH", TARGETS)
-        self.assertIn("AT", TARGETS)
-        self.assertEqual(TARGET_POSITIONS, {"AT": 0, "DE": 1, "FR": 2, "IT": 3})
+    def test_at_is_not_a_forecast_output_and_ch_is_required(self):
+        self.assertNotIn("AT", TARGETS)
+        self.assertIn("CH", TARGETS)
+        self.assertEqual(TARGET_POSITIONS, {"CH": 0, "DE": 1, "FR": 2, "IT": 3})
 
     def test_validate_output_targets_accepts_only_canonical_order(self):
         self.assertEqual(validate_output_targets(TARGETS), TARGETS)
         self.assertEqual(validate_output_targets(list(TARGETS)), TARGETS)
-        for bad in [("CH", "DE", "FR", "IT"), ("AT", "CH", "FR", "IT"),
-                    ("DE", "FR", "IT"), ("AT", "DE", "FR"),
-                    ("DE", "AT", "FR", "IT"), ("AT", "DE", "FR", "IT", "CH"),
-                    ("AT", "AT", "FR", "IT"), ()]:
+        for bad in [("AT", "DE", "FR", "IT"), ("CH", "AT", "FR", "IT"),
+                    ("DE", "FR", "IT"), ("CH", "DE", "FR"),
+                    ("DE", "CH", "FR", "IT"), ("CH", "DE", "FR", "IT", "AT"),
+                    ("CH", "CH", "FR", "IT"), ()]:
             with self.subTest(bad=bad), self.assertRaises(InvalidOutputTargets):
                 validate_output_targets(bad)
         with self.assertRaises(InvalidOutputTargets):
-            validate_output_targets("AT")
+            validate_output_targets("CH")
 
-    def test_require_output_target_rejects_ch(self):
-        self.assertEqual(require_output_target("AT"), "AT")
-        for entity in ("CH", "", "ch", "XX"):
+    def test_require_output_target_rejects_at(self):
+        self.assertEqual(require_output_target("CH"), "CH")
+        for entity in ("AT", "", "ch", "XX"):
             with self.subTest(entity=entity), self.assertRaises(ValueError):
                 require_output_target(entity)
 
     def test_submission_positions_are_stable(self):
-        self.assertEqual(submission_position("AT"), 0)
+        self.assertEqual(submission_position("CH"), 0)
         self.assertEqual(submission_position("DE"), 1)
         self.assertEqual(submission_position("FR"), 2)
         self.assertEqual(submission_position("IT"), 3)
         self.assertEqual(submission_target_mapping(),
-                         {"target_0": "AT", "target_1": "DE", "target_2": "FR", "target_3": "IT"})
+                         {"target_0": "CH", "target_1": "DE", "target_2": "FR", "target_3": "IT"})
 
     def test_mock_pipeline_forecasts_a_scored_target_not_ch(self):
         result = run_mock_pipeline(PipelineConfig(ISSUE, seed=17, include_ridge=False))
-        self.assertEqual(result.forecast.target_entity, "AT")
-        self.assertNotEqual(result.forecast.target_entity, "CH")
+        self.assertEqual(result.forecast.target_entity, "CH")
+        self.assertNotEqual(result.forecast.target_entity, "AT")
         require_output_target(result.forecast.target_entity)
 
 
@@ -93,23 +92,23 @@ class SubmissionWriterTests(unittest.TestCase):
         self.assertEqual(len(rows), SUBMISSION_ROWS)
         for index, row in enumerate(rows):
             self.assertEqual(tuple(row), SUBMISSION_COLUMNS)
-            # positional mapping: target_0 holds AT samples, target_3 holds IT
+            # positional mapping: target_0 holds CH samples, target_3 holds IT
             self.assertEqual(row["target_0"][0], index * 300)
             self.assertEqual(row["target_3"][0], 3000 + index * 300)
             self.assertEqual(len(row["target_1"]), SAMPLES_PER_TARGET)
         self.assertEqual(validate_submission_table(rows), submission_target_mapping())
 
-    def test_submission_writer_rejects_ch_as_output(self):
+    def test_submission_writer_rejects_at_as_output(self):
         with self.assertRaises(InvalidOutputTargets):
-            self.table(**{"CH": self.series("CH")})
+            self.table(**{"AT": self.series("AT")})
         series = {entity: self.series(entity) for entity in TARGETS}
-        series["CH"] = series["AT"]
+        series["AT"] = series["CH"]
         with self.assertRaises(InvalidOutputTargets):
             build_submission_table(series, self.stamps())
 
     def test_submission_writer_requires_all_four_targets(self):
         series = {entity: self.series(entity) for entity in TARGETS}
-        del series["AT"]
+        del series["CH"]
         with self.assertRaises(InvalidOutputTargets):
             build_submission_table(series, self.stamps())
 
@@ -156,14 +155,14 @@ class OOFHandoffTests(unittest.TestCase):
             champions[entity], _ = select_champion(oof_by_target[entity], metric="mae")
         return build_oof_handoff(oof_by_target, champions), champions
 
-    def test_handoff_columns_are_exactly_the_at_de_fr_it_contract(self):
+    def test_handoff_columns_are_exactly_the_ch_de_fr_it_contract(self):
         self.assertEqual(OOF_HANDOFF_COLUMNS,
                          ("timestamp", "fold_id", "horizon", "issue_time",
-                          "AT_actual", "AT_pred", "AT_residual",
+                          "CH_actual", "CH_pred", "CH_residual",
                           "DE_actual", "DE_pred", "DE_residual",
                           "FR_actual", "FR_pred", "FR_residual",
                           "IT_actual", "IT_pred", "IT_residual"))
-        self.assertEqual(RESIDUAL_VECTOR_ORDER, ("AT", "DE", "FR", "IT"))
+        self.assertEqual(RESIDUAL_VECTOR_ORDER, ("CH", "DE", "FR", "IT"))
         rows, _ = self.handoff()
         self.assertTrue(rows)
         self.assertEqual(oof_handoff_column_order(rows), OOF_HANDOFF_COLUMNS)
@@ -180,18 +179,18 @@ class OOFHandoffTests(unittest.TestCase):
         for entity in TARGETS:
             self.assertIn(champions[entity], self.oof().candidate_identities)
 
-    def test_handoff_rejects_ch_and_missing_targets(self):
+    def test_handoff_rejects_at_and_missing_targets(self):
         rows, champions = self.handoff()
         oof_by_target = {entity: self.oof() for entity in TARGETS}
-        with_ch = dict(oof_by_target, **{"CH": self.oof()})
+        with_at = dict(oof_by_target, **{"AT": self.oof()})
         with self.assertRaises(InvalidOutputTargets):
-            build_oof_handoff(with_ch, champions)
-        with_ch_champions = dict(champions, **{"CH": champions["AT"]})
+            build_oof_handoff(with_at, champions)
+        with_at_champions = dict(champions, **{"AT": champions["CH"]})
         with self.assertRaises(InvalidOutputTargets):
-            build_oof_handoff(oof_by_target, with_ch_champions)
-        incomplete = {entity: self.oof() for entity in TARGETS if entity != "AT"}
+            build_oof_handoff(oof_by_target, with_at_champions)
+        incomplete = {entity: self.oof() for entity in TARGETS if entity != "CH"}
         with self.assertRaises(InvalidOutputTargets):
-            build_oof_handoff(incomplete, {k: v for k, v in champions.items() if k != "AT"})
+            build_oof_handoff(incomplete, {k: v for k, v in champions.items() if k != "CH"})
 
     def test_handoff_requires_aligned_folds_across_targets(self):
         oof_by_target = {entity: self.oof() for entity in TARGETS}
@@ -212,21 +211,21 @@ class OOFHandoffTests(unittest.TestCase):
                 header = next(reader)
             self.assertEqual(tuple(header), OOF_HANDOFF_COLUMNS)
             summary = json.loads(summary_path.read_text())
-        self.assertEqual(summary["target_order"], ["AT", "DE", "FR", "IT"])
-        self.assertEqual(summary["residual_vector_order"], ["AT", "DE", "FR", "IT"])
+        self.assertEqual(summary["target_order"], ["CH", "DE", "FR", "IT"])
+        self.assertEqual(summary["residual_vector_order"], ["CH", "DE", "FR", "IT"])
         self.assertEqual(set(summary["per_target"]), set(TARGETS))
-        self.assertNotIn("CH", summary["per_target"])
-        self.assertEqual(summary["champions"]["AT"]["model_id"], champions["AT"][0])
+        self.assertNotIn("AT", summary["per_target"])
+        self.assertEqual(summary["champions"]["CH"]["model_id"], champions["CH"][0])
         for entity in TARGETS:
             stats = summary["per_target"][entity]
             self.assertEqual(stats["count"], len(rows))
             self.assertAlmostEqual(stats["bias"], -stats["residual_mean"], places=9)
             self.assertGreaterEqual(stats["mae"], 0.0)
 
-    def test_residual_summary_rejects_ch(self):
+    def test_residual_summary_rejects_at(self):
         rows, champions = self.handoff()
         with self.assertRaises(InvalidOutputTargets):
-            residual_summary(rows, dict(champions, **{"CH": champions["AT"]}))
+            residual_summary(rows, dict(champions, **{"AT": champions["CH"]}))
 
 
 if __name__ == "__main__":

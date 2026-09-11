@@ -21,7 +21,7 @@ from swissgrid_forecaster.uncertainty_model import ResidualObservation, Residual
 T0 = datetime(2019, 1, 1, tzinfo=timezone.utc)
 HANDOFF_COLUMNS = (
     "timestamp", "fold_id", "horizon", "issue_time",
-    "AT_actual", "AT_pred", "AT_residual",
+    "CH_actual", "CH_pred", "CH_residual",
     "DE_actual", "DE_pred", "DE_residual",
     "FR_actual", "FR_pred", "FR_residual",
     "IT_actual", "IT_pred", "IT_residual",

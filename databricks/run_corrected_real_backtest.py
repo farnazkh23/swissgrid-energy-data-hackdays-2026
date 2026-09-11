@@ -193,8 +193,8 @@ def _score_one_fold(spark, samples, rows, output_dir):
                         for stamp in timestamps]
     prediction_name = "corrected_backtest_predictions"
     realization_name = "corrected_backtest_realizations"
-    prediction_schema = "timestamp timestamp, AT array<int>, DE array<int>, FR array<int>, IT array<int>"
-    realization_schema = "timestamp timestamp, AT double, DE double, FR double, IT double"
+    prediction_schema = "timestamp timestamp, CH array<int>, DE array<int>, FR array<int>, IT array<int>"
+    realization_schema = "timestamp timestamp, CH double, DE double, FR double, IT double"
     spark.createDataFrame(prediction_rows, schema=prediction_schema).createOrReplaceTempView(prediction_name)
     spark.createDataFrame(realization_rows, schema=realization_schema).createOrReplaceTempView(realization_name)
     raw_score = float(score_prediction_table(prediction_name, realization_name))
@@ -220,7 +220,7 @@ def run_corrected_real_backtest(spark, *, fold_count=1,
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    net_dataframe = spark.table("edh.input.net_positions").select("Zeitstempel", *TARGETS, "CH")
+    net_dataframe = spark.table("edh.input.net_positions").select("Zeitstempel", *TARGETS, "AT")
     start, end_exclusive, indexed_hours = _fold_bounds(spark, net_dataframe, fold_count)
     net = _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(start))
                                     & (F.col("Zeitstempel") < F.lit(end_exclusive))))
@@ -289,7 +289,7 @@ print("Targets:", TARGETS)
 print("Fold count:", FOLD_COUNT)
 print("Output:", OUTPUT_DIR)
 
-assert TARGETS == ("AT", "DE", "FR", "IT")
+assert TARGETS == ("CH", "DE", "FR", "IT")
 
 status = run_corrected_real_backtest(
     spark,

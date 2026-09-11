@@ -58,7 +58,7 @@ class RealModelingV1Tests(unittest.TestCase):
             issue=issue, use_lseg=False,
         )
         features = dict(zip(names, values))
-        self.assertIsNone(features["target_AT_lag_1h"])
+        self.assertIsNone(features["target_CH_lag_1h"])
         self.assertIsNone(features["source_cross_border_exchanges_AT_CH_value"])
         self.assertIsNone(features["source_generation_forecast_generation_forecast_value"])
 

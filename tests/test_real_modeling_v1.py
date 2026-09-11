@@ -8,6 +8,7 @@ from swissgrid_forecaster.real_modeling_v1 import (
     build_features,
     make_weekly_folds,
 )
+from swissgrid_forecaster.time_contract import canonical_utc
 
 
 class RealModelingV1Tests(unittest.TestCase):
@@ -91,6 +92,18 @@ class RealModelingV1Tests(unittest.TestCase):
         self.assertEqual(a, b)
         self.assertEqual(len(a), 300)
         self.assertTrue(all(isinstance(value, int) for value in a))
+
+    def test_europe_zurich_dst_wall_clock_contract(self):
+        spring_valid = datetime(2026, 3, 29, 1, 45, tzinfo=timezone.utc).replace(tzinfo=None)
+        spring_next = datetime(2026, 3, 29, 3, 0, tzinfo=timezone.utc).replace(tzinfo=None)
+        self.assertEqual(canonical_utc(spring_valid, "Europe/Zurich"),
+                         datetime(2026, 3, 29, 0, 45, tzinfo=timezone.utc))
+        self.assertEqual(canonical_utc(spring_next, "Europe/Zurich"),
+                         datetime(2026, 3, 29, 1, 0, tzinfo=timezone.utc))
+        with self.assertRaises(ValueError):
+            canonical_utc(datetime(2026, 3, 29, 2, 0), "Europe/Zurich")
+        with self.assertRaises(ValueError):
+            canonical_utc(datetime(2025, 10, 26, 2, 0), "Europe/Zurich")
 
 
 if __name__ == "__main__":

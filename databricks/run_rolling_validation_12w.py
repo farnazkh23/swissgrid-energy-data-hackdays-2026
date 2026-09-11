@@ -22,6 +22,7 @@ for path in (REPO_SRC, EDH_SOURCE_ROOT):
         sys.path.insert(0, path)
 
 from swissgrid_forecaster.real_modeling_v1 import _hourly_table, build_hourly_targets
+from swissgrid_forecaster.time_contract import canonical_utc, source_query_bounds
 from swissgrid_forecaster.rolling_validation import (
     HOUR, TRAIN_HOURS, VALIDATION_WEEKS, WARM_START_WEEKS, history_requirements,
     build_validation_folds, require_history, run_rolling_validation,
@@ -42,8 +43,8 @@ def _utc(value):
     return value.astimezone(UTC) if isinstance(value, datetime) else value
 
 
-def _rows(dataframe):
-    return tuple({key: _utc(value) if isinstance(value, datetime) else value
+def _rows(dataframe, *, timestamp_timezone="UTC"):
+    return tuple({key: (canonical_utc(value, timestamp_timezone) if isinstance(value, datetime) else value)
                   for key, value in row.asDict(recursive=True).items()}
                  for row in dataframe.toLocalIterator())
 
@@ -51,10 +52,12 @@ def _rows(dataframe):
 def _filtered_rows(spark, table_name, start, end_exclusive):
     dataframe = spark.table(table_name)
     numeric = [field.name for field in dataframe.schema.fields if isinstance(field.dataType, NumericType)]
+    query_start, query_end = source_query_bounds(start, end_exclusive, "Europe/Zurich")
     selected = [F.col("`Zeitstempel`").alias("Zeitstempel")]
     selected.extend(F.col(f"`{name}`").cast("double").alias(name) for name in numeric)
     return _rows(dataframe.select(*selected).where(
-        (F.col("Zeitstempel") >= F.lit(start)) & (F.col("Zeitstempel") < F.lit(end_exclusive))))
+        (F.col("Zeitstempel") >= F.lit(query_start)) & (F.col("Zeitstempel") < F.lit(query_end))),
+                 timestamp_timezone="Europe/Zurich")
 
 
 def _generation_rows(spark, start, end_exclusive):
@@ -76,7 +79,7 @@ def _generation_rows(spark, start, end_exclusive):
                       .where((F.col("Zeitstempel") >= F.lit(start)) & (F.col("Zeitstempel") < F.lit(end_exclusive)))
                       .groupBy("Zeitstempel")
                       .agg(*[F.avg(f"{table}_{name}").alias(f"{table}_{name}") for name in selected_names]))
-        rows.extend(_rows(aggregated))
+        rows.extend(_rows(aggregated, timestamp_timezone="UTC"))
     return tuple(rows)
 
 
@@ -118,12 +121,15 @@ def run_12_week_validation(spark, *, output_dir):
     start = requirements["required_earliest"]
     end_exclusive = last + timedelta(hours=1)
     net_dataframe = spark.table("edh.input.net_positions").select("Zeitstempel", *INPUT_COUNTRIES)
-    net = _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(start)) & (F.col("Zeitstempel") < F.lit(end_exclusive))))
+    query_start, query_end = source_query_bounds(start, end_exclusive, "Europe/Zurich")
+    net = _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(query_start)) & (F.col("Zeitstempel") < F.lit(query_end))),
+                 timestamp_timezone="Europe/Zurich")
     cross = _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive)
     ntc = _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive)
     generation = _generation_rows(spark, start, end_exclusive)
     hourly_targets = build_hourly_targets(net)
     print("Rolling validation history diagnostics:")
+    print("  canonical source contract: Europe/Zurich wall clock -> aware UTC exactly once")
     print("  first available hourly target:", min(hourly_targets) if hourly_targets else None)
     print("  last available hourly target:", max(hourly_targets) if hourly_targets else None)
     print("  required earliest timestamp:", requirements["required_earliest"])

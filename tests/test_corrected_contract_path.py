@@ -6,7 +6,9 @@ import unittest
 
 from swissgrid_forecaster.edh_scoring import PERFECT_SCORE
 from swissgrid_forecaster.oof_handoff import write_oof_handoff
-from swissgrid_forecaster.real_modeling_v1 import _assemble_selected_oof, make_weekly_folds
+from swissgrid_forecaster.real_modeling_v1 import (
+    LSEGFeatures, _assemble_selected_oof, _run_scenario, make_weekly_folds,
+)
 from swissgrid_forecaster.real_uncertainty_backtest import (
     METHODS, compare_methods, fit_calibrated_champion, load_actuals,
     load_point_forecasts, load_residual_panel, sample_folds,
@@ -32,10 +34,10 @@ def synthetic_oof_rows(folds=3):
     weekly = make_weekly_folds(timestamps, max_folds=folds)
     rows = []
     for fold_index, fold in enumerate(weekly):
+        issue_time = fold.forecast_start - timedelta(hours=1)
         for hour_index, target_time in enumerate(fold.forecast_timestamps):
-            issue_time = target_time - timedelta(hours=1)
             row = {"timestamp": target_time.isoformat(), "fold_id": fold.fold_id,
-                   "horizon": 1, "issue_time": issue_time.isoformat()}
+                   "horizon": hour_index + 1, "issue_time": issue_time.isoformat()}
             for target_index, target in enumerate(TARGETS):
                 actual = float(1000 * target_index + fold_index * 10 + hour_index)
                 residual = float(((hour_index + fold_index) % 17) - 8 + target_index)
@@ -47,27 +49,49 @@ def synthetic_oof_rows(folds=3):
 
 
 class CorrectedContractPathTests(unittest.TestCase):
+    def test_fixed_origin_model_predictions_have_weekly_horizons(self):
+        start = T0
+        timestamps = tuple(start + timedelta(hours=index)
+                           for index in range(672 + 168 * 3))
+        targets = {
+            stamp: {target: float(index + target_index * 100)
+                    for target_index, target in enumerate(TARGETS)}
+            for index, stamp in enumerate(timestamps)
+        }
+        folds = make_weekly_folds(timestamps, max_folds=3)
+        _, _, predictions = _run_scenario(
+            targets=targets, db_tables={}, lseg=LSEGFeatures({}, {}, {}, ()),
+            folds=folds, use_lseg=False, scenario="synthetic_fixed_origin",
+            seed=7, model_names=("ridge",), collect_predictions=True,
+        )
+        self.assertEqual(len(predictions), 3 * 168 * len(TARGETS))
+        for fold in folds:
+            rows = [row for row in predictions if row["fold_id"] == fold.fold_id]
+            self.assertEqual({row["issue_time"] for row in rows}, {fold.issue_time.isoformat()})
+            self.assertEqual(sorted({row["horizon"] for row in rows}), list(range(1, 169)))
+
     def test_target_specific_oof_assembly_preserves_distinct_rows(self):
         selected = []
         scoreboard = []
         champions = {target: "ridge" for target in TARGETS}
-        for hour_index in range(2):
+        issue_time = T0
+        for hour_index in range(168):
             target_time = T0 + timedelta(hours=hour_index + 1)
             for target_index, target in enumerate(TARGETS):
                 actual = 1000 * target_index + hour_index
                 prediction = actual - (target_index + 1)
                 selected.append({
                     "fold_id": "week_1", "timestamp": target_time.isoformat(),
-                    "issue_time": (target_time - timedelta(hours=1)).isoformat(),
-                    "horizon": 1, "target": target, "actual": actual,
+                    "issue_time": issue_time.isoformat(),
+                    "horizon": hour_index + 1, "target": target, "actual": actual,
                     "pred": prediction,
                 })
         for target_index, target in enumerate(TARGETS):
             scoreboard.append({"target": target, "model": "ridge",
                                "mae_mean": float(target_index + 1)})
 
-        rows = _assemble_selected_oof(selected, champions, scoreboard, expected_rows=2)
-        self.assertEqual(len(rows), 2)
+        rows = _assemble_selected_oof(selected, champions, scoreboard, expected_rows=168)
+        self.assertEqual(len(rows), 168)
         for target_index, target in enumerate(TARGETS):
             self.assertEqual(rows[0][f"{target}_actual"], 1000 * target_index)
             self.assertEqual(rows[0][f"{target}_pred"], 1000 * target_index - target_index - 1)
@@ -77,6 +101,11 @@ class CorrectedContractPathTests(unittest.TestCase):
         rows, folds = synthetic_oof_rows(3)
         self.assertEqual(len(folds), 3)
         self.assertTrue(all(len(forecast.forecast_timestamps) == 168 for forecast in folds))
+        for fold in folds:
+            fold_rows = [row for row in rows if row["fold_id"] == fold.fold_id]
+            self.assertEqual({row["issue_time"] for row in fold_rows},
+                             {(fold.forecast_start - timedelta(hours=1)).isoformat()})
+            self.assertEqual([row["horizon"] for row in fold_rows], list(range(1, 169)))
         with tempfile.TemporaryDirectory() as directory:
             write_oof_handoff(rows, {target: ("ridge", "v1") for target in TARGETS}, directory)
             path = Path(directory) / "oof_predictions.csv"
@@ -85,12 +114,14 @@ class CorrectedContractPathTests(unittest.TestCase):
             panel = load_residual_panel(path)
             self.assertEqual(panel.target_names, TARGETS)
             self.assertEqual(len(panel.rows), 3 * 168)
+            self.assertEqual([int(row[2].total_seconds() / 3600) for row in panel.rows[:168]],
+                             list(range(1, 169)))
             ranked = compare_methods(panel, seed=7, n_samples=8, methods=METHODS)
             self.assertEqual({row.method for row in ranked}, set(METHODS))
             model, demo = fit_calibrated_champion(
-                panel, ranked[0].method, fit_weeks=1, calibration_weeks=1,
+                panel, "correlated_gaussian", fit_weeks=1, calibration_weeks=1,
                 seed=7, n_samples=8,
-                **METHODS[ranked[0].method],
+                **METHODS["correlated_gaussian"],
             )
             self.assertEqual(len(demo), 1)
             self.assertGreater(demo[0][0][0], panel.rows[167][0])
@@ -137,7 +168,7 @@ class CorrectedContractPathTests(unittest.TestCase):
         rows, _ = synthetic_oof_rows(1)
         panel = ResidualPanel(TARGETS, tuple(
             (datetime.fromisoformat(row["issue_time"]), datetime.fromisoformat(row["timestamp"]),
-             timedelta(hours=1), tuple(row[f"{target}_residual"] for target in TARGETS))
+             timedelta(hours=row["horizon"]), tuple(row[f"{target}_residual"] for target in TARGETS))
             for row in rows))
         with self.assertRaises(ValueError):
             compare_methods(panel, seed=1, n_samples=4, methods=METHODS)

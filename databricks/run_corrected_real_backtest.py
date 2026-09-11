@@ -163,6 +163,25 @@ def _write_model_artifacts(result, output_dir):
     return rows
 
 
+def _assert_fixed_origin_oof(rows):
+    """Fail closed unless every target's selected OOF week is fixed-origin."""
+    by_fold = {}
+    for row in rows:
+        by_fold.setdefault(row["fold_id"], []).append(row)
+    if not by_fold:
+        raise ValueError("fixed-origin OOF handoff is empty")
+    for fold_id, fold_rows in by_fold.items():
+        issues = {row["issue_time"] for row in fold_rows}
+        horizons = {int(row["horizon"]) for row in fold_rows}
+        if len(fold_rows) != 168 or len(issues) != 1 or horizons != set(range(1, 169)):
+            raise ValueError(f"fold {fold_id} is not a fixed-origin 168-hour forecast")
+        for row in fold_rows:
+            target = datetime.fromisoformat(row["timestamp"])
+            issue = datetime.fromisoformat(row["issue_time"])
+            if target - issue != timedelta(hours=int(row["horizon"])):
+                raise ValueError(f"fold {fold_id} has inconsistent horizon clocks")
+
+
 def _score_one_fold(spark, samples, rows, output_dir):
     """Score the first generated 168-hour fold through edh2026.local_scoring."""
     first = samples[:168]
@@ -213,9 +232,11 @@ def run_corrected_real_backtest(spark, *, fold_count=1,
     result = run_v1(net_rows=net, cross_rows=cross, ntc_rows=ntc,
                     generation_rows=generation, lseg_root=None,
                     max_folds=fold_count, seed=seed)
+    _assert_fixed_origin_oof(result["oof_predictions"])
     oof_rows = _write_model_artifacts(result, output_dir)
 
     status = {"folds_completed": fold_count, "targets": list(TARGETS),
+              "forecast_semantics": "fixed-origin 168-hour weekly forecast; horizons 1..168",
               "champions": result["champions"], "probability": "not_run",
               "driver_collection_counts": {
                   "complete_hour_index": indexed_hours,

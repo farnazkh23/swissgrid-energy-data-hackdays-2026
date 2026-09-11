@@ -362,10 +362,16 @@ class WeeklyFold:
     def forecast_start(self) -> datetime:
         return self.forecast_timestamps[0]
 
+    @property
+    def issue_time(self) -> datetime:
+        """The single issue point for the unseen forecast week."""
+        return self.forecast_start - timedelta(hours=1)
+
     def manifest(self) -> dict:
         return {"fold_id": self.fold_id, "train_rows": len(self.train_timestamps),
                 "forecast_rows": len(self.forecast_timestamps), "forecast_hours": len(self.forecast_timestamps),
                 "train_start": self.train_timestamps[0].isoformat(), "train_end": self.train_timestamps[-1].isoformat(),
+                "issue_time": self.issue_time.isoformat(),
                 "forecast_start": self.forecast_timestamps[0].isoformat(), "forecast_end": self.forecast_timestamps[-1].isoformat(),
                 "leakage_check": "train timestamps precede forecast_start"}
 
@@ -430,6 +436,10 @@ def build_features(*, target_history: Mapping[datetime, Mapping[str, float]],
     for table_name in sorted(db_tables):
         table = db_tables.get(table_name, {})
         columns = sorted((db_series or {}).get(table_name, {})) or sorted({column for row in table.values() for column in row})
+        if table_name.endswith("generation_forecast"):
+            forbidden = {column for column in columns if column in {"actual_generation", "scheduled_consumption"}}
+            if forbidden:
+                raise ValueError("forbidden generation feature columns: " + ", ".join(sorted(forbidden)))
         base = table_name.split(".")[-1]
         for column in columns:
             series = (db_series or {}).get(table_name, {}).get(column)
@@ -604,10 +614,10 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
     for fold_index, fold in enumerate(folds):
         for target in TARGETS:
             train = [(build_features(target_history=targets, db_tables=db_tables, db_series=db_series, target_series=target_series, lseg=lseg, stamp=stamp, issue=stamp, use_lseg=use_lseg)[1], targets[stamp][target]) for stamp in fold.train_timestamps]
-            # Fold forecast timestamps are target/valid times. This benchmark
-            # is one-hour ahead, so each feature snapshot is as-of target - 1h;
-            # using the target timestamp would expose current/future values.
-            future = [(build_features(target_history=targets, db_tables=db_tables, db_series=db_series, target_series=target_series, lseg=lseg, stamp=stamp, issue=stamp - timedelta(hours=1), use_lseg=use_lseg)[1], targets[stamp][target]) for stamp in fold.forecast_timestamps]
+            # Every forecast row in a fold shares one issue point.  Features
+            # must be frozen at that point; using stamp - 1h would turn the
+            # weekly forecast into a rolling one-hour-ahead backtest.
+            future = [(build_features(target_history=targets, db_tables=db_tables, db_series=db_series, target_series=target_series, lseg=lseg, stamp=stamp, issue=fold.issue_time, use_lseg=use_lseg)[1], targets[stamp][target]) for stamp in fold.forecast_timestamps]
             models = {"seasonal_persistence": None}
             if "ridge" in model_names:
                 models["ridge"] = Ridge().fit(train)
@@ -618,7 +628,11 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
                 model = models[model_name]
                 point = []
                 for features, _ in future:
-                    if model_name == "seasonal_persistence": point.append(targets[fold.forecast_timestamps[len(point)] - timedelta(hours=168)][target])
+                    if model_name == "seasonal_persistence":
+                        seasonal = _lookup(target_series[target], fold.forecast_timestamps[len(point)], fold.issue_time, 168)
+                        if seasonal is None:
+                            raise ValueError("seasonal persistence value is unavailable at the fold issue time")
+                        point.append(seasonal)
                     else: point.append(model.predict(features))
                 truth = [actual for _, actual in future]
                 target_seed = sum(ord(char) for char in target)
@@ -629,7 +643,8 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
                     point_predictions.extend(
                         {"fold_id": fold.fold_id, "row_id": f"{fold.fold_id}:{stamp.isoformat()}",
                          "timestamp": stamp.isoformat(),
-                         "issue_time": (stamp - timedelta(hours=1)).isoformat(), "horizon": 1,
+                         "issue_time": fold.issue_time.isoformat(),
+                         "horizon": int((stamp - fold.issue_time).total_seconds() / 3600),
                          "model": model_name, "target": target, "actual": actual,
                          "pred": prediction}
                         for stamp, actual, prediction in zip(fold.forecast_timestamps, truth, point)
@@ -661,6 +676,15 @@ def _assemble_selected_oof(selected_predictions, champion_names, scoreboard, *, 
     if len({timestamp for _, timestamp in joint_keys}) != len(joint_keys):
         raise ValueError("duplicate joint OOF timestamp across folds")
 
+    by_fold = defaultdict(list)
+    for fold_id, timestamp in joint_keys:
+        by_fold[fold_id].append(selected_by_key[(fold_id, timestamp, TARGETS[0])])
+    for entries in by_fold.values():
+        issues = {entry["issue_time"] for entry in entries}
+        horizons = {int(entry["horizon"]) for entry in entries}
+        if len(entries) != 168 or len(issues) != 1 or horizons != set(range(1, 169)):
+            raise ValueError("each OOF fold must have one issue time and horizons 1..168")
+
     for target in TARGETS:
         target_keys = {(fold_id, timestamp)
                        for fold_id, timestamp, row_target in selected_by_key
@@ -677,15 +701,18 @@ def _assemble_selected_oof(selected_predictions, champion_names, scoreboard, *, 
         target_time = datetime.fromisoformat(first["timestamp"])
         issue_time = datetime.fromisoformat(first["issue_time"])
         horizon_hours = (target_time - issue_time).total_seconds() / 3600
-        if issue_time >= target_time or horizon_hours != 1 or first["horizon"] != 1:
-            raise ValueError("invalid selected OOF chronology or one-hour horizon")
+        if issue_time >= target_time or horizon_hours != first["horizon"] or not 1 <= horizon_hours <= 168:
+            raise ValueError("invalid selected OOF chronology or horizon")
+        expected_horizon = int(horizon_hours)
+        if horizon_hours != expected_horizon:
+            raise ValueError("OOF horizon must be an integer number of hours")
         row = {"timestamp": first["timestamp"], "fold_id": first["fold_id"],
-               "horizon": 1, "issue_time": first["issue_time"]}
+               "horizon": expected_horizon, "issue_time": first["issue_time"]}
         for target in TARGETS:
             value = values[target]
             if value["target"] != target:
                 raise ValueError("selected OOF target identity was overwritten")
-            if (value["issue_time"], value["timestamp"], value["horizon"]) != (first["issue_time"], first["timestamp"], first["horizon"]):
+            if (value["issue_time"], value["timestamp"], value["horizon"]) != (first["issue_time"], first["timestamp"], expected_horizon):
                 raise ValueError("selected OOF target timestamps are misaligned")
             actual = value["actual"]
             prediction = value["pred"]

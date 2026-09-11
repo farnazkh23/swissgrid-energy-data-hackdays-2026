@@ -107,7 +107,13 @@ def evaluate_sampler(panel: ResidualPanel, method: str, *, seed: int, n_samples:
     scorer = score_fn or (lambda capture, sharpness, mae, rows: _default_score(capture, sharpness, mae,
                                                                                target_coverage=target_coverage))
     weekly = []
-    for held_out_index in range(1, len(folds)):
+    # Horizon-conditioned covariance needs at least two prior observations in
+    # each horizon bucket.  With one 168-hour fold, every horizon occurs once,
+    # so begin its walk-forward scoring after two fit folds.
+    first_held_out = 2 if method == "horizon_covariance" else 1
+    if len(folds) <= first_held_out:
+        raise ValueError("horizon-conditioned evaluation requires at least three weekly folds")
+    for held_out_index in range(first_held_out, len(folds)):
         held_out = folds[held_out_index]
         training_rows = tuple(row for fold in folds[:held_out_index] for row in fold)
         training_panel = ResidualPanel(panel.target_names, training_rows)

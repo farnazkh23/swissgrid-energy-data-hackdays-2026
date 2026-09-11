@@ -1,4 +1,5 @@
 import unittest
+import csv
 from pathlib import Path
 
 from swissgrid_forecaster.real_uncertainty_backtest import (
@@ -13,6 +14,17 @@ from swissgrid_forecaster.sampler_evaluation import weekly_folds
 CSV_PATH = Path(__file__).resolve().parent.parent / "artifacts" / "real_backtest" / "oof_predictions.csv"
 
 
+def _artifact_header():
+    if not CSV_PATH.is_file():
+        return ()
+    with CSV_PATH.open(newline="", encoding="utf-8") as stream:
+        return tuple(next(csv.reader(stream), ()))
+
+
+_header = _artifact_header()
+ARTIFACT_READY = CSV_PATH.is_file() and "AT_residual" in _header and "CH_residual" not in _header
+
+
 def small_panel(weeks: int = 4) -> ResidualPanel:
     """First few real weekly folds only, to keep tests fast."""
     panel = load_residual_panel(CSV_PATH)
@@ -20,7 +32,7 @@ def small_panel(weeks: int = 4) -> ResidualPanel:
     return ResidualPanel(panel.target_names, tuple(row for fold in folds for row in fold))
 
 
-@unittest.skipUnless(CSV_PATH.is_file(), "real OOF backtest artifact not present")
+@unittest.skipUnless(ARTIFACT_READY, "repaired AT/DE/FR/IT OOF artifact not present")
 class LoadResidualPanelTests(unittest.TestCase):
     def test_loads_all_rows_with_expected_targets(self):
         panel = load_residual_panel(CSV_PATH)
@@ -39,7 +51,7 @@ class LoadResidualPanelTests(unittest.TestCase):
         self.assertEqual(set(forecasts[panel.rows[0][1]]), set(TARGET_NAMES))
 
 
-@unittest.skipUnless(CSV_PATH.is_file(), "real OOF backtest artifact not present")
+@unittest.skipUnless(ARTIFACT_READY, "repaired AT/DE/FR/IT OOF artifact not present")
 class CompareMethodsOnRealDataTests(unittest.TestCase):
     def test_all_four_methods_evaluate_and_rank(self):
         panel = small_panel(4)
@@ -51,7 +63,7 @@ class CompareMethodsOnRealDataTests(unittest.TestCase):
             self.assertGreater(len(row.weekly_scores), 0)
 
 
-@unittest.skipUnless(CSV_PATH.is_file(), "real OOF backtest artifact not present")
+@unittest.skipUnless(ARTIFACT_READY, "repaired AT/DE/FR/IT OOF artifact not present")
 class CalibratedChampionSamplingTests(unittest.TestCase):
     def test_fit_calibrate_and_sample_real_demo_week(self):
         panel = small_panel(6)
@@ -74,7 +86,7 @@ class CalibratedChampionSamplingTests(unittest.TestCase):
             fit_calibrated_champion(panel, "correlated_gaussian", fit_weeks=2, calibration_weeks=1, seed=1)
 
 
-@unittest.skipUnless(CSV_PATH.is_file(), "real OOF backtest artifact not present")
+@unittest.skipUnless(ARTIFACT_READY, "repaired AT/DE/FR/IT OOF artifact not present")
 class ScoreAgainstRealActualsTests(unittest.TestCase):
     def test_official_formula_scores_our_real_champion_samples(self):
         panel = small_panel(6)

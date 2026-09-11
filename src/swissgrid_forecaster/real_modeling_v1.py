@@ -334,20 +334,20 @@ def build_hourly_targets(rows: Iterable[Mapping]) -> dict[datetime, dict[str, fl
         bucket = stamp.replace(minute=0, second=0, microsecond=0)
         if stamp.minute not in (0, 15, 30, 45):
             continue
-        for target in TARGETS:
+        for target in (*TARGETS, *CONTEXT_ONLY_COUNTRIES):
             number = _number(raw.get(target))
             if number is not None:
                 buckets[bucket][target].append((stamp, number))
     result = {}
     for stamp, values in buckets.items():
         row = {}
-        for target in TARGETS:
+        for target in (*TARGETS, *CONTEXT_ONLY_COUNTRIES):
             expected = {stamp + timedelta(minutes=15 * index) for index in range(4)}
             observed = {time for time, _ in values.get(target, ())}
             if len(values.get(target, ())) != 4 or observed != expected or len(observed) != 4:
                 break
             row[target] = mean(value for _, value in values[target])
-        if len(row) == len(TARGETS):
+        if len(row) == len(TARGETS) + len(CONTEXT_ONLY_COUNTRIES):
             result[stamp] = row
     return dict(sorted(result.items()))
 

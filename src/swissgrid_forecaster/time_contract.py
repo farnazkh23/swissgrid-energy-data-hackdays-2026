@@ -1,4 +1,4 @@
-"""Canonical timestamp conversion for provider and model clocks."""
+"""Canonical timestamp conversion for organizer and provider clocks."""
 
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -10,10 +10,10 @@ EUROPE_ZURICH = ZoneInfo("Europe/Zurich")
 def canonical_utc(value: datetime, source_timezone: str = "UTC") -> datetime:
     """Convert one source timestamp to aware UTC exactly once.
 
-    Databricks net-position, exchange, and NTC tables expose local
-    Europe/Zurich wall-clock timestamps.  A nonexistent spring-forward wall
-    time is rejected, as is an ambiguous autumn wall time without an explicit
-    fold, so DST data is never silently invented or collapsed.
+    ``source_timezone='UTC'`` is a neutral aware label: it preserves the
+    organizer timestamp's numeric wall-clock coordinate and performs no shift.
+    Explicit Europe/Zurich conversion is available for genuinely local source
+    feeds, but is not used for organizer challenge timestamp keys.
     """
     if not isinstance(value, datetime):
         raise TypeError("timestamp must be a datetime")
@@ -31,6 +31,11 @@ def canonical_utc(value: datetime, source_timezone: str = "UTC") -> datetime:
     if first.utcoffset() != second.utcoffset():
         raise ValueError(f"ambiguous Europe/Zurich local timestamp requires fold: {wall.isoformat()}")
     return first.astimezone(UTC)
+
+
+def organizer_timestamp(value: datetime) -> datetime:
+    """Attach the neutral UTC label to an organizer timestamp without shifting it."""
+    return canonical_utc(value, "UTC")
 
 
 def source_query_bounds(start: datetime, end_exclusive: datetime, source_timezone: str):

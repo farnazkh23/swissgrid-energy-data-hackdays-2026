@@ -8,7 +8,7 @@ from swissgrid_forecaster.real_modeling_v1 import (
     build_features,
     make_weekly_folds,
 )
-from swissgrid_forecaster.time_contract import canonical_utc
+from swissgrid_forecaster.time_contract import canonical_utc, organizer_timestamp
 
 
 class RealModelingV1Tests(unittest.TestCase):
@@ -104,6 +104,8 @@ class RealModelingV1Tests(unittest.TestCase):
             canonical_utc(datetime(2026, 3, 29, 2, 0), "Europe/Zurich")
         with self.assertRaises(ValueError):
             canonical_utc(datetime(2025, 10, 26, 2, 0), "Europe/Zurich")
+        self.assertEqual(organizer_timestamp(datetime(2026, 8, 20, 23, 0)),
+                         datetime(2026, 8, 20, 23, 0, tzinfo=timezone.utc))
 
 
 if __name__ == "__main__":

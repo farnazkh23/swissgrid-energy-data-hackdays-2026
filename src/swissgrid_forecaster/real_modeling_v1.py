@@ -640,6 +640,72 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
     return summaries, fold_scores, point_predictions
 
 
+def _assemble_selected_oof(selected_predictions, champion_names, scoreboard, *, expected_rows):
+    """Assemble one joint row without dropping the target key."""
+    selected_by_key = {}
+    for prediction in selected_predictions:
+        target = prediction.get("target")
+        if target not in TARGETS:
+            raise ValueError(f"selected OOF row has invalid target {target!r}")
+        key = (prediction["fold_id"], prediction["timestamp"], target)
+        if key in selected_by_key:
+            raise ValueError("duplicate selected OOF prediction")
+        selected_by_key[key] = prediction
+
+    joint_keys = {(fold_id, timestamp)
+                  for fold_id, timestamp, _ in selected_by_key}
+    if len(selected_by_key) != len(joint_keys) * len(TARGETS):
+        raise ValueError("every selected OOF joint timestamp must contain all four targets")
+    if len(joint_keys) != expected_rows:
+        raise ValueError(f"expected {expected_rows} joint OOF rows, got {len(joint_keys)}")
+    if len({timestamp for _, timestamp in joint_keys}) != len(joint_keys):
+        raise ValueError("duplicate joint OOF timestamp across folds")
+
+    for target in TARGETS:
+        target_keys = {(fold_id, timestamp)
+                       for fold_id, timestamp, row_target in selected_by_key
+                       if row_target == target}
+        if target_keys != joint_keys:
+            raise ValueError(f"missing or misaligned selected OOF rows for {target}")
+
+    rows = []
+    target_errors = {target: [] for target in TARGETS}
+    for fold_id, timestamp in sorted(joint_keys):
+        values = {target: selected_by_key[(fold_id, timestamp, target)]
+                  for target in TARGETS}
+        first = values[TARGETS[0]]
+        target_time = datetime.fromisoformat(first["timestamp"])
+        issue_time = datetime.fromisoformat(first["issue_time"])
+        horizon_hours = (target_time - issue_time).total_seconds() / 3600
+        if issue_time >= target_time or horizon_hours != 1 or first["horizon"] != 1:
+            raise ValueError("invalid selected OOF chronology or one-hour horizon")
+        row = {"timestamp": first["timestamp"], "fold_id": first["fold_id"],
+               "horizon": 1, "issue_time": first["issue_time"]}
+        for target in TARGETS:
+            value = values[target]
+            if value["target"] != target:
+                raise ValueError("selected OOF target identity was overwritten")
+            if (value["issue_time"], value["timestamp"], value["horizon"]) != (first["issue_time"], first["timestamp"], first["horizon"]):
+                raise ValueError("selected OOF target timestamps are misaligned")
+            actual = value["actual"]
+            prediction = value["pred"]
+            row[f"{target}_actual"] = actual
+            row[f"{target}_pred"] = prediction
+            row[f"{target}_residual"] = actual - prediction
+            target_errors[target].append(abs(actual - prediction))
+        rows.append(row)
+
+    for target in TARGETS:
+        expected = [entry for entry in scoreboard
+                    if entry["target"] == target and entry["model"] == champion_names[target]]
+        if len(expected) != 1:
+            raise ValueError(f"missing unique scoreboard row for Champion {target}")
+        handoff_mae = mean(target_errors[target])
+        if abs(handoff_mae - expected[0]["mae_mean"]) > max(1e-9, abs(expected[0]["mae_mean"]) * 1e-9):
+            raise ValueError(f"handoff MAE does not match scoreboard for {target}")
+    return rows
+
+
 def run_v1(*, net_rows: Iterable[Mapping], cross_rows: Iterable[Mapping], ntc_rows: Iterable[Mapping],
            generation_rows: Iterable[Mapping] = (),
            lseg_root: str | Path | None = None, max_folds: int = 12, start_at: datetime | None = None,
@@ -703,35 +769,9 @@ def run_v1(*, net_rows: Iterable[Mapping], cross_rows: Iterable[Mapping], ntc_ro
         selected_models[target] = min(candidates, key=lambda row: (row["mae_mean"], row["model"]))
     champion_names = {target: row["model"] for target, row in selected_models.items()}
     selected_predictions = [row for row in all_predictions if row["model"] == champion_names[row["target"]]]
-    per_target_keys = {target: {(row["fold_id"], row["timestamp"])
-                                for row in selected_predictions if row["target"] == target}
-                       for target in TARGETS}
-    reference_keys = per_target_keys[TARGETS[0]]
-    if any(per_target_keys[target] != reference_keys for target in TARGETS[1:]):
-        raise ValueError("selected OOF targets are not aligned on fold_id and target timestamp")
-    prediction_keys = {(row["fold_id"], row["timestamp"], row["target"])
-                       for row in selected_predictions}
-    if len(prediction_keys) != len(selected_predictions):
-        raise ValueError("duplicate selected OOF prediction")
-    by_key = {(row["fold_id"], row["timestamp"]): row for row in selected_predictions}
-    oof_predictions = []
-    for key in sorted(by_key, key=lambda value: (by_key[value]["timestamp"], value[0])):
-        values = {target: by_key[(key[0], key[1])] for target in TARGETS}
-        first = values[TARGETS[0]]
-        target_time = datetime.fromisoformat(first["timestamp"])
-        issue_time = datetime.fromisoformat(first["issue_time"])
-        horizon_hours = (target_time - issue_time).total_seconds() / 3600
-        if issue_time >= target_time or horizon_hours <= 0 or horizon_hours != first["horizon"]:
-            raise ValueError("invalid selected OOF chronology or horizon")
-        row = {"timestamp": first["timestamp"], "fold_id": first["fold_id"],
-               "horizon": int(horizon_hours), "issue_time": first["issue_time"]}
-        for target in TARGETS:
-            if (values[target]["issue_time"], values[target]["timestamp"], values[target]["horizon"]) != (first["issue_time"], first["timestamp"], first["horizon"]):
-                raise ValueError("selected OOF target timestamps are misaligned")
-            row[f"{target}_actual"] = values[target]["actual"]
-            row[f"{target}_pred"] = values[target]["pred"]
-            row[f"{target}_residual"] = values[target]["actual"] - values[target]["pred"]
-        oof_predictions.append(row)
+    oof_predictions = _assemble_selected_oof(
+        selected_predictions, champion_names, all_summary,
+        expected_rows=len(folds) * 168)
     result = {"target_manifest": {"target_names": list(TARGETS), "complete_hourly_rows": len(targets),
                                    "min_timestamp": min(targets).isoformat(), "max_timestamp": max(targets).isoformat(),
                                    "aggregation": "mean of four complete UTC quarter-hour observations", "unit": "MW",

@@ -6,7 +6,7 @@ import unittest
 
 from swissgrid_forecaster.edh_scoring import PERFECT_SCORE
 from swissgrid_forecaster.oof_handoff import write_oof_handoff
-from swissgrid_forecaster.real_modeling_v1 import make_weekly_folds
+from swissgrid_forecaster.real_modeling_v1 import _assemble_selected_oof, make_weekly_folds
 from swissgrid_forecaster.real_uncertainty_backtest import (
     METHODS, compare_methods, fit_calibrated_champion, load_actuals,
     load_point_forecasts, load_residual_panel, sample_folds,
@@ -47,6 +47,32 @@ def synthetic_oof_rows(folds=3):
 
 
 class CorrectedContractPathTests(unittest.TestCase):
+    def test_target_specific_oof_assembly_preserves_distinct_rows(self):
+        selected = []
+        scoreboard = []
+        champions = {target: "ridge" for target in TARGETS}
+        for hour_index in range(2):
+            target_time = T0 + timedelta(hours=hour_index + 1)
+            for target_index, target in enumerate(TARGETS):
+                actual = 1000 * target_index + hour_index
+                prediction = actual - (target_index + 1)
+                selected.append({
+                    "fold_id": "week_1", "timestamp": target_time.isoformat(),
+                    "issue_time": (target_time - timedelta(hours=1)).isoformat(),
+                    "horizon": 1, "target": target, "actual": actual,
+                    "pred": prediction,
+                })
+        for target_index, target in enumerate(TARGETS):
+            scoreboard.append({"target": target, "model": "ridge",
+                               "mae_mean": float(target_index + 1)})
+
+        rows = _assemble_selected_oof(selected, champions, scoreboard, expected_rows=2)
+        self.assertEqual(len(rows), 2)
+        for target_index, target in enumerate(TARGETS):
+            self.assertEqual(rows[0][f"{target}_actual"], 1000 * target_index)
+            self.assertEqual(rows[0][f"{target}_pred"], 1000 * target_index - target_index - 1)
+            self.assertEqual(rows[0][f"{target}_residual"], target_index + 1)
+
     def test_three_fold_end_to_end_oof_uncertainty_and_score(self):
         rows, folds = synthetic_oof_rows(3)
         self.assertEqual(len(folds), 3)

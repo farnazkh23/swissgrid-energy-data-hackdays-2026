@@ -4,7 +4,7 @@ This is a fixed-origin production run only.  It does not run historical
 validation and it never invokes an official submission helper.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import sys
 
 from pyspark.sql import functions as F
@@ -30,6 +30,9 @@ from swissgrid_forecaster.time_contract import organizer_timestamp, source_query
 
 TARGET_COLUMNS = ("timestamp", *TARGETS)
 TABLE_NAME = "edh.group_0.g4_submission_v1"
+FORECAST_START = datetime(2026, 9, 2, tzinfo=timezone.utc)
+FORECAST_END = datetime(2026, 9, 8, 23, tzinfo=timezone.utc)
+FORECAST_HOURS = 168
 GENERATION_ALLOWED_FIELD = "generation_forecast"
 GENERATION_FORBIDDEN_FIELDS = frozenset({"actual_generation", "scheduled_consumption"})
 
@@ -82,6 +85,18 @@ def _generation_rows(spark, start, end_exclusive):
     return tuple(rows)
 
 
+def _coverage(rows):
+    """Summarize timestamp coverage without filling missing source values."""
+    timestamps = tuple(sorted({row["Zeitstempel"] for row in rows if row.get("Zeitstempel") is not None}))
+    hours = tuple(sorted({stamp.replace(minute=0, second=0, microsecond=0) for stamp in timestamps}))
+    return {
+        "rows": len(rows),
+        "unique_hours": len(hours),
+        "first": hours[0] if hours else None,
+        "last": hours[-1] if hours else None,
+    }
+
+
 def _validate_submission(dataframe, *, label):
     expected = list(TARGET_COLUMNS)
     if dataframe.columns != expected:
@@ -92,14 +107,26 @@ def _validate_submission(dataframe, *, label):
         data_type = dataframe.schema[target].dataType
         if not isinstance(data_type, ArrayType) or not isinstance(data_type.elementType, IntegerType):
             raise ValueError(f"{label}: {target} must have array<int> type")
-    rows = tuple(row.asDict(recursive=True) for row in dataframe.toLocalIterator())
-    if len(rows) != 168:
-        raise ValueError(f"{label}: expected exactly 168 rows, got {len(rows)}")
+    rows = tuple(sorted(
+        (row.asDict(recursive=True) for row in dataframe.toLocalIterator()),
+        key=lambda row: row["timestamp"],
+    ))
+    if len(rows) != FORECAST_HOURS:
+        raise ValueError(f"{label}: expected exactly {FORECAST_HOURS} rows, got {len(rows)}")
     timestamps = [row["timestamp"] for row in rows]
     if any(value is None for value in timestamps):
         raise ValueError(f"{label}: null timestamp")
     if len(set(timestamps)) != len(timestamps):
         raise ValueError(f"{label}: timestamps are not unique")
+    expected_timestamps = tuple(
+        (FORECAST_START + timedelta(hours=index)).replace(tzinfo=None)
+        for index in range(FORECAST_HOURS)
+    )
+    if tuple(timestamps) != expected_timestamps:
+        raise ValueError(
+            f"{label}: timestamps must be exactly {expected_timestamps[0]} through "
+            f"{expected_timestamps[-1]}"
+        )
     for row in rows:
         for target in TARGETS:
             values = row[target]
@@ -138,7 +165,13 @@ def run_submission(spark):
     if not targets:
         raise ValueError("no complete causal hourly target data")
     issue_time = max(targets)
-    forecast_timestamps = tuple(issue_time + timedelta(hours=index) for index in range(1, 169))
+    forecast_timestamps = tuple(
+        FORECAST_START + timedelta(hours=index) for index in range(FORECAST_HOURS)
+    )
+    if forecast_timestamps[-1] != FORECAST_END:
+        raise ValueError("fixed forecast constants do not describe 168 hourly timestamps")
+    if issue_time >= FORECAST_START:
+        raise ValueError(f"issue_time {issue_time} is not before fixed forecast start")
     train_timestamps = tuple(issue_time - timedelta(hours=index) for index in range(671, -1, -1))
     if any(timestamp not in targets for timestamp in train_timestamps):
         raise ValueError("latest causal history does not contain 672 complete hours")
@@ -152,6 +185,23 @@ def run_submission(spark):
     _hourly_table(cross_rows)
     _hourly_table(ntc_rows)
     _hourly_table(generation_rows)
+
+    gap_hours = int((FORECAST_START - issue_time).total_seconds() // 3600)
+    coverage = {
+        "net_positions": _coverage(net_rows),
+        "cross_border_exchanges": _coverage(cross_rows),
+        "ntc_month": _coverage(ntc_rows),
+        "generation_forecast_*": _coverage(generation_rows),
+    }
+    print("SUBMISSION CAUSAL AUDIT")
+    print(f"- latest actual target timestamp: {issue_time}")
+    print(f"- issue_time: {issue_time}")
+    print(f"- forecast start: {FORECAST_START}")
+    print(f"- forecast end: {FORECAST_END}")
+    print(f"- gap from issue_time to forecast start: {gap_hours} hours")
+    print("- gap handling: no target values are fabricated; causal seasonal persistence "
+          "uses 168h/nearby/336h lags when available, then latest_causal fallback")
+    print(f"- feature coverage: {coverage}")
 
     target_series = {target: {stamp: row[target] for stamp, row in targets.items()} for target in TARGETS}
     samples_by_target = {target: [] for target in TARGETS}
@@ -179,6 +229,7 @@ def run_submission(spark):
         print("- validator FAIL")
         raise
 
+    # The generated table has passed the complete contract before this overwrite.
     dataframe.write.mode("overwrite").saveAsTable(TABLE_NAME)
     stored = spark.table(TABLE_NAME).select(*TARGET_COLUMNS)
     _validate_submission(stored, label="stored")
@@ -188,23 +239,3 @@ def run_submission(spark):
 
 # Databricks execution cell. Run this file only for the one-table submission path.
 submission_table = run_submission(spark)
-
-
-# Manual official submission block. This runner never calls it automatically.
-from edh2026.trigger_submission import submit_prediction_table
-
-# Default probabilistic score
-# print(submit_prediction_table(
-#     "group_0",
-#     "g4_submission_v1",
-#     identifier="pulse_v1_default",
-#     scoring="default",
-# ))
-
-# RMSE score
-# print(submit_prediction_table(
-#     "group_0",
-#     "g4_submission_v1",
-#     identifier="pulse_v1_rmse",
-#     scoring="rmse",
-# ))

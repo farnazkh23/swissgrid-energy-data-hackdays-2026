@@ -24,6 +24,7 @@ for path in (REPO_SRC, EDH_SOURCE_ROOT):
 from swissgrid_forecaster.real_modeling_v1 import _hourly_table, build_hourly_targets
 from swissgrid_forecaster.rolling_validation import TRAIN_HOURS, VALIDATION_WEEKS, run_rolling_validation
 from swissgrid_forecaster.target_contract import INPUT_COUNTRIES, TARGETS
+from edh2026.local_scoring import score_prediction_table
 
 UTC = timezone.utc
 VALIDATION_TABLE = "edh.group_0.g4_validation_realizations"
@@ -75,6 +76,21 @@ def _generation_rows(spark, start, end_exclusive):
     return tuple(rows)
 
 
+def _official_score(spark, predictions, actuals, timestamps):
+    """Call the organizer's local evaluator on two temporary 168-row views."""
+    prediction_rows = [(timestamp, *[predictions[timestamp][target] for target in TARGETS])
+                       for timestamp in timestamps]
+    realization_rows = [(timestamp, *[actuals[timestamp][target] for target in TARGETS])
+                        for timestamp in timestamps]
+    prediction_name = "rolling_validation_predictions"
+    realization_name = "rolling_validation_realizations"
+    prediction_schema = "timestamp timestamp, CH array<int>, DE array<int>, FR array<int>, IT array<int>"
+    realization_schema = "timestamp timestamp, CH double, DE double, FR double, IT double"
+    spark.createDataFrame(prediction_rows, schema=prediction_schema).createOrReplaceTempView(prediction_name)
+    spark.createDataFrame(realization_rows, schema=realization_schema).createOrReplaceTempView(realization_name)
+    return float(score_prediction_table(prediction_name, realization_name))
+
+
 def run_12_week_validation(spark, *, output_dir):
     spark.conf.set("spark.sql.session.timeZone", "UTC")
     validation = _rows(spark.table(VALIDATION_TABLE).select("timestamp", "CH_actual", "DE_actual", "FR_actual", "IT_actual"))
@@ -100,7 +116,9 @@ def run_12_week_validation(spark, *, output_dir):
         tables["edh.input.generation_forecast"] = _hourly_table(generation)
     result = run_rolling_validation(hourly_targets=hourly_targets, realizations=realizations,
                                     db_tables=tables, output_dir=output_dir,
-                                    validation_weeks=VALIDATION_WEEKS)
+                                    validation_weeks=VALIDATION_WEEKS,
+                                    official_score_fn=lambda predictions, actuals, timestamps:
+                                    _official_score(spark, predictions, actuals, timestamps))
     status = {"validation_table": VALIDATION_TABLE, "targets": list(TARGETS),
               "validation_weeks": VALIDATION_WEEKS, "development_weeks": 11,
               "holdout_week": 12, "official_submission_called": False,

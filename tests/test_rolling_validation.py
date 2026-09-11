@@ -7,7 +7,7 @@ from pathlib import Path
 from swissgrid_forecaster.real_modeling_v1 import WeeklyFold
 from swissgrid_forecaster.rolling_validation import (
     HOUR, TARGETS, WEEK_HOURS, _score_week, build_validation_folds,
-    run_rolling_validation, validate_validation_folds,
+    organizer_local_score, run_rolling_validation, validate_validation_folds,
 )
 
 
@@ -15,8 +15,10 @@ T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
 def synthetic_data():
-    all_timestamps = tuple(T0 + timedelta(hours=index) for index in range(672 + 12 * 168))
-    validation = all_timestamps[672:]
+    warm_start_weeks = 2
+    data_start = T0 - HOUR
+    all_timestamps = tuple(data_start + timedelta(hours=index) for index in range(673 + warm_start_weeks * 168 + 12 * 168))
+    validation = all_timestamps[673 + warm_start_weeks * 168:]
     targets = {
         timestamp: {"AT": float(index + 10), **{
             target: float(index + target_index * 100)
@@ -56,20 +58,35 @@ class RollingValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _score_week(predictions, realizations, validation[:167])
 
+    def test_organizer_scorer_parity_formula(self):
+        timestamps = tuple(T0 + index * HOUR for index in range(168))
+        actuals = {timestamp: {target: 10.0 for target in TARGETS} for timestamp in timestamps}
+        predictions = {timestamp: {target: tuple([9, 10, 11] * 100) for target in TARGETS}
+                       for timestamp in timestamps}
+        standard_deviation = (2.0 / 3.0) ** 0.5
+        sharpness = 2.0 / (2.0 + 2.0 * standard_deviation)
+        expected = 0.2 + 0.45 + 0.35 * sharpness
+        self.assertAlmostEqual(organizer_local_score(predictions, actuals, timestamps), expected, places=12)
+
     def test_end_to_end_artifacts_preserve_order_holdout_and_samples(self):
         all_timestamps, validation, targets, realizations = synthetic_data()
         with tempfile.TemporaryDirectory() as directory:
             result = run_rolling_validation(
                 hourly_targets=targets, realizations=realizations,
                 output_dir=directory, point_models=("seasonal_persistence",),
+                warm_start_weeks=2,
                 seed=7,
             )
             summary = result["summary"]
             self.assertEqual(summary["weeks_completed"], 12)
             self.assertEqual(summary["development_weeks"], 11)
             self.assertEqual(summary["holdout_week"], 12)
+            self.assertGreater(summary["week_12_holdout_score"], 0.0)
             self.assertEqual(result["by_week"][-1]["week_number"], 12)
-            self.assertEqual(result["by_week"][-1]["forecast_start"], "2026-04-16T00:00:00Z")
+            self.assertEqual(result["by_week"][-1]["forecast_start"], "2026-04-30T00:00:00Z")
+            self.assertEqual(len(result["summary"]["historical_calibration_timestamps"]), 2 * 168)
+            self.assertTrue(all(timestamp < result["by_week"][0]["issue_time"]
+                                for timestamp in result["summary"]["historical_calibration_timestamps"]))
             self.assertEqual(set(result["by_target"]), set(TARGETS))
             self.assertEqual(tuple(result["by_week"][0]["selected_point_model"]), TARGETS)
             first = result["predictions"]["validation_week_01"]

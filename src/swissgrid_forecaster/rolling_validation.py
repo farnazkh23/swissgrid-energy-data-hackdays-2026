@@ -27,6 +27,7 @@ HOUR = timedelta(hours=1)
 WEEK_HOURS = 168
 TRAIN_HOURS = 672
 VALIDATION_WEEKS = 12
+WARM_START_WEEKS = 8
 SAMPLES_PER_TARGET = 300
 POINT_MODELS = ("ridge", "seasonal_persistence", "hist_gradient_boosting")
 UNCERTAINTY_METHODS = {
@@ -126,7 +127,23 @@ def _validate_samples(samples_by_target):
             raise ValueError(f"{target} requires exactly 300 integer samples")
 
 
-def _score_week(predictions, actuals, timestamps) -> tuple[dict, dict]:
+def organizer_local_score(predictions, actuals, timestamps) -> float:
+    """Exact pure-Python equivalent of edh2026.evaluate_submission scoring."""
+    if len(timestamps) != WEEK_HOURS or len(predictions) != WEEK_HOURS:
+        raise ValueError("organizer scoring requires exactly 168 rows")
+    if tuple(predictions) != tuple(timestamps) or set(predictions) != set(timestamps):
+        raise ValueError("prediction and realization timestamps are not exactly aligned")
+    row_scores = []
+    for target in TARGETS:
+        actual = [actuals[timestamp][target] for timestamp in timestamps]
+        distribution = [predictions[timestamp][target] for timestamp in timestamps]
+        _, scores = _distribution_metrics(actual, distribution)
+        row_scores.append(scores)
+    return mean(sum(row_scores[target_index][row_index] for target_index in range(len(TARGETS))) / len(TARGETS)
+                 for row_index in range(WEEK_HOURS))
+
+
+def _score_week(predictions, actuals, timestamps, official_score_fn=None) -> tuple[dict, dict]:
     if len(timestamps) != WEEK_HOURS or len(predictions) != WEEK_HOURS:
         raise ValueError("organizer scoring requires exactly 168 rows")
     if tuple(predictions) != tuple(timestamps) or set(predictions) != set(timestamps):
@@ -142,10 +159,13 @@ def _score_week(predictions, actuals, timestamps) -> tuple[dict, dict]:
         metrics.update(distribution_metrics)
         target_metrics[target] = metrics
         row_scores.append(scores)
-    score = mean(sum(row_scores[target_index][row_index] for target_index in range(len(TARGETS))) / len(TARGETS)
-                 for row_index in range(WEEK_HOURS))
+    diagnostic_score = mean(sum(row_scores[target_index][row_index] for target_index in range(len(TARGETS))) / len(TARGETS)
+                            for row_index in range(WEEK_HOURS))
+    official_score = (official_score_fn(predictions, actuals, timestamps)
+                      if official_score_fn is not None else organizer_local_score(predictions, actuals, timestamps))
     aggregate = {
-        "score": score,
+        "official_local_score": official_score,
+        "diagnostic_score": diagnostic_score,
         "capture": mean(target_metrics[target]["capture"] for target in TARGETS),
         "sharpness": mean(target_metrics[target]["sharpness"] for target in TARGETS),
         "MAE": mean(target_metrics[target]["mae"] for target in TARGETS),
@@ -213,14 +233,27 @@ def run_rolling_validation(*, hourly_targets, realizations, output_dir=None,
                            db_tables=None, lseg=None,
                            point_models=POINT_MODELS,
                            validation_weeks: int = VALIDATION_WEEKS,
+                           warm_start_weeks: int = WARM_START_WEEKS,
+                           official_score_fn=None,
                            seed: int = 20260910) -> dict:
     """Run the 12-week organizer-style validation harness without submission."""
     validate_output_targets(TARGETS)
     validation_timestamps = tuple(sorted(realizations))
     folds = build_validation_folds(validation_timestamps, hourly_targets, weeks=validation_weeks)
+    warm_folds = ()
+    if warm_start_weeks:
+        warm_timestamps = tuple(
+            folds[0].forecast_start - timedelta(hours=WEEK_HOURS * warm_start_weeks + 1)
+            + index * HOUR for index in range(WEEK_HOURS * warm_start_weeks))
+        warm_folds = build_validation_folds(warm_timestamps, hourly_targets, weeks=warm_start_weeks)
+    all_folds = tuple(warm_folds) + tuple(folds)
+    all_actuals = dict(realizations)
+    for fold in warm_folds:
+        for timestamp in fold.forecast_timestamps:
+            all_actuals[timestamp] = {target: hourly_targets[timestamp][target] for target in TARGETS}
     lseg = lseg or LSEGFeatures({}, {}, {}, ())
     _, _, raw_predictions = _run_scenario(
-        targets=hourly_targets, db_tables=db_tables or {}, lseg=lseg, folds=folds,
+        targets=hourly_targets, db_tables=db_tables or {}, lseg=lseg, folds=all_folds,
         use_lseg=False, scenario="rolling_validation", seed=seed,
         model_names=point_models, collect_predictions=True,
     )
@@ -229,21 +262,24 @@ def run_rolling_validation(*, hourly_targets, realizations, output_dir=None,
     week_rows = []
     target_rows = defaultdict(list)
     prediction_artifacts = {}
-    for week_index, fold in enumerate(folds):
-        selected_models = _choose_point_models(indexed, realizations, folds, week_index, point_models)
-        prior_panel = None if week_index == 0 else _residual_panel(indexed, realizations, folds[:week_index], selected_by_week)
-        method = _choose_uncertainty_method(prior_panel, week_index, seed)
+    for global_index, fold in enumerate(all_folds):
+        selected_models = _choose_point_models(indexed, all_actuals, all_folds, global_index, point_models)
+        selected_by_week.append(selected_models)
+        if global_index < warm_start_weeks:
+            continue
+        week_index = global_index - warm_start_weeks
+        prior_panel = _residual_panel(indexed, all_actuals, all_folds[:global_index], selected_by_week[:global_index])
+        method = _choose_uncertainty_method(prior_panel, global_index, seed)
         point_forecasts = {timestamp: {target: indexed[(fold.fold_id, timestamp, target, selected_models[target])]["pred"] for target in TARGETS} for timestamp in fold.forecast_timestamps}
         samples = _samples_for_week(method, prior_panel, point_forecasts, fold.forecast_timestamps, seed + week_index * 10000)
-        target_metrics, aggregate = _score_week(samples, realizations, fold.forecast_timestamps)
+        target_metrics, aggregate = _score_week(samples, realizations, fold.forecast_timestamps, official_score_fn)
         prediction_artifacts[fold.fold_id] = tuple({"timestamp": _iso(timestamp), **{f"{target}_samples": list(samples[timestamp][target]) for target in TARGETS}} for timestamp in fold.forecast_timestamps)
-        week_rows.append({"week_number": week_index + 1, "forecast_start": _iso(fold.forecast_start), "forecast_end": _iso(fold.forecast_timestamps[-1]), "issue_time": _iso(fold.issue_time), "score": aggregate["score"], "capture": aggregate["capture"], "sharpness": aggregate["sharpness"], "MAE": aggregate["MAE"], **target_metrics, "targets": target_metrics, "selected_point_model": selected_models, "selected_uncertainty_method": method, "calibration_parameters": {}})
-        selected_by_week.append(selected_models)
+        week_rows.append({"week_number": week_index + 1, "forecast_start": _iso(fold.forecast_start), "forecast_end": _iso(fold.forecast_timestamps[-1]), "issue_time": _iso(fold.issue_time), "score": aggregate["official_local_score"], "official_local_score": aggregate["official_local_score"], "diagnostic_score": aggregate["diagnostic_score"], "capture": aggregate["capture"], "sharpness": aggregate["sharpness"], "MAE": aggregate["MAE"], **target_metrics, "targets": target_metrics, "selected_point_model": selected_models, "selected_uncertainty_method": method, "calibration_parameters": {}})
         for target in TARGETS:
             target_rows[target].append(target_metrics[target])
-    scores = [row["score"] for row in week_rows]
+    scores = [row["official_local_score"] for row in week_rows]
     development_scores = scores[:validation_weeks - 1]
-    summary = {"weeks_completed": len(week_rows), "development_weeks": validation_weeks - 1, "holdout_week": validation_weeks, "mean_score_weeks_1_11": mean(development_scores), "median_score_weeks_1_11": median(development_scores), "worst_score_weeks_1_11": min(development_scores), "std_score_weeks_1_11": pstdev(development_scores), "week_12_holdout_score": scores[-1], "all_12_mean_score": mean(scores), "all_12_median_score": median(scores)}
+    summary = {"weeks_completed": len(week_rows), "development_weeks": validation_weeks - 1, "holdout_week": validation_weeks, "mean_score_weeks_1_11": mean(development_scores), "median_score_weeks_1_11": median(development_scores), "worst_score_weeks_1_11": min(development_scores), "std_score_weeks_1_11": pstdev(development_scores), "week_12_holdout_score": scores[-1], "all_12_mean_score": mean(scores), "all_12_median_score": median(scores), "warm_start_weeks": warm_start_weeks, "historical_calibration_timestamps": [_iso(timestamp) for fold in warm_folds for timestamp in fold.forecast_timestamps]}
     by_target = {}
     for target in TARGETS:
         rows = target_rows[target]

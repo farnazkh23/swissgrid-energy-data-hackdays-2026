@@ -21,15 +21,16 @@ for path in (REPO_SRC, EDH_SOURCE_ROOT):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from swissgrid_forecaster.real_modeling_v1 import _hourly_table, build_hourly_targets
+from swissgrid_forecaster.real_modeling_v1 import LSEGFeatures, _hourly_table, _run_scenario, build_hourly_targets
 from swissgrid_forecaster.time_contract import organizer_timestamp, source_query_bounds
 from swissgrid_forecaster.rolling_validation import (
-    HOUR, TRAIN_HOURS, VALIDATION_WEEKS, WARM_START_WEEKS, history_requirements,
+    HOUR, POINT_MODELS, TRAIN_HOURS, VALIDATION_WEEKS, WARM_START_WEEKS, history_requirements,
     build_validation_folds, require_history, run_rolling_validation,
     validate_validation_folds,
 )
 from swissgrid_forecaster.target_contract import INPUT_COUNTRIES, TARGETS
 from edh2026.local_scoring import score_prediction_table
+from swissgrid_forecaster.uncertainty_model import ResidualPanel, fit_uncertainty_model, sample_distribution
 
 UTC = timezone.utc
 VALIDATION_TABLE = "edh.group_0.g4_validation_realizations"
@@ -221,14 +222,96 @@ def run_preflight(spark, *, output_dir):
     return {"preflight": "PASS", "validation_rows": len(validation), "warm_folds": len(warm_folds), "validation_folds": len(validation_folds), "required_earliest": str(start), "scorer_result": float(scorer_result)}
 
 
+def run_smoke_test(spark, *, output_dir):
+    """Fit all point candidates on the warm fold crossing the DST reference."""
+    spark.conf.set("spark.sql.session.timeZone", "UTC")
+    validation = tuple(sorted(_rows(spark.table(VALIDATION_TABLE).select("timestamp", "CH_actual", "DE_actual", "FR_actual", "IT_actual")), key=lambda row: row["timestamp"]))
+    first, last = validation[0]["timestamp"], validation[-1]["timestamp"]
+    requirements = history_requirements(first, warm_start_weeks=WARM_START_WEEKS)
+    start, end_exclusive = requirements["required_earliest"], last + timedelta(hours=1)
+    net_dataframe = spark.table("edh.input.net_positions").select("Zeitstempel", *INPUT_COUNTRIES)
+    query_start, query_end = source_query_bounds(start, end_exclusive, "UTC")
+    net = _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(query_start)) & (F.col("Zeitstempel") < F.lit(query_end))))
+    hourly_targets = build_hourly_targets(net)
+    require_history(hourly_targets, requirements)
+    warm_timestamps = tuple(requirements["warm_forecast_start"] + index * HOUR for index in range(WARM_START_WEEKS * 168))
+    warm_folds = build_validation_folds(warm_timestamps, hourly_targets, weeks=WARM_START_WEEKS)
+    affected_index, affected = next(((index, fold) for index, fold in enumerate(warm_folds) if any(timestamp - timedelta(hours=168) not in hourly_targets for timestamp in fold.forecast_timestamps)), (len(warm_folds) - 1, warm_folds[-1]))
+    cross = _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive)
+    ntc = _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive)
+    generation = _generation_rows(spark, start, end_exclusive)
+    tables = {"edh.input.cross_border_exchanges": _hourly_table(cross), "edh.input.ntc_month": _hourly_table(ntc)}
+    if generation:
+        tables["edh.input.generation_forecast"] = _hourly_table(generation)
+    pre_forecast_start = affected.forecast_start - timedelta(hours=336)
+    pre_issue = pre_forecast_start - HOUR
+    pre_train_required = tuple(pre_issue - timedelta(hours=TRAIN_HOURS - 1 - index)
+                               for index in range(TRAIN_HOURS))
+    pre_train = tuple(timestamp for timestamp in pre_train_required if timestamp in hourly_targets)
+    pre_forecast = tuple(pre_forecast_start + index * HOUR for index in range(168))
+    if len(pre_train) == 0 or any(timestamp not in hourly_targets for timestamp in pre_forecast):
+        raise ValueError("smoke test lacks a complete causal pre-DST fold")
+    pre_fold = type(affected)("smoke_pre_dst", pre_train, pre_forecast)
+    smoke_folds = (pre_fold, affected)
+    _, scores, predictions = _run_scenario(
+        targets=hourly_targets, db_tables=tables, lseg=LSEGFeatures({}, {}, {}, ()),
+        folds=smoke_folds, use_lseg=False, scenario="rolling_validation_smoke",
+        seed=20260910, model_names=POINT_MODELS, collect_predictions=True)
+    expected = len(POINT_MODELS) * len(TARGETS) * 168 * 2
+    if len(predictions) != expected or len(scores) != len(POINT_MODELS) * len(TARGETS) * 2:
+        raise ValueError("smoke test did not produce all point-model predictions")
+    seasonal = {(row["fold_id"], datetime.fromisoformat(row["timestamp"]), row["target"]): row["pred"]
+                for row in predictions if row["model"] == "seasonal_persistence"}
+    prior_rows = []
+    for fold in (pre_fold,):
+        for timestamp in fold.forecast_timestamps:
+            prior_rows.append((fold.issue_time, timestamp, timestamp - fold.issue_time,
+                               tuple(hourly_targets[timestamp][target] - seasonal[(fold.fold_id, timestamp, target)]
+                                     for target in TARGETS)))
+    if len(prior_rows) < 2:
+        raise ValueError("smoke test lacks prior residual rows for uncertainty fitting")
+    uncertainty = fit_uncertainty_model(ResidualPanel(TARGETS, tuple(prior_rows)),
+                                        method="correlated_gaussian", fit_cutoff=affected.issue_time)
+    point_forecasts = {timestamp: {target: seasonal[(affected.fold_id, timestamp, target)] for target in TARGETS}
+                       for timestamp in affected.forecast_timestamps}
+    samples = {}
+    for index, timestamp in enumerate(affected.forecast_timestamps):
+        samples[timestamp] = sample_distribution(
+            uncertainty, point_forecasts[timestamp], seed=20260910 + index,
+            n_samples=300)
+    if any(len(samples[timestamp][target]) != 300 or
+           any(not isinstance(value, int) for value in samples[timestamp][target])
+           for timestamp in samples for target in TARGETS):
+        raise ValueError("smoke test did not produce 300 integer samples")
+    actuals = {timestamp: {target: hourly_targets[timestamp][target] for target in TARGETS}
+               for timestamp in affected.forecast_timestamps}
+    score = _official_score(spark, samples, actuals, affected.forecast_timestamps)
+    if score is None:
+        raise ValueError("smoke test organizer scorer returned no score")
+    print("Smoke fold:", affected.fold_id, "issue_time:", affected.issue_time)
+    print("Smoke uncertainty: correlated_gaussian, organizer score:", score)
+    print("ROLLING VALIDATION SMOKE TEST: PASS")
+    return {"smoke": "PASS", "fold_id": affected.fold_id, "predictions": len(predictions), "models": list(POINT_MODELS), "uncertainty": "correlated_gaussian", "score": float(score)}
+
+
 # Databricks execution cell.  Open this file and Run all.  Keep preflight on
 # until its PASS result is visible before starting the expensive model run.
 PREFLIGHT_ONLY = True
+SMOKE_ONLY = False
 VALIDATION_WEEKS = 12
 OUTPUT_DIR = "/Workspace/Users/user32@swissgridlab.onmicrosoft.com/swissgrid_backtest_outputs/rolling_validation_12w"
-print("Starting rolling validation preflight" if PREFLIGHT_ONLY else "Starting organizer-style rolling validation; official submission disabled")
-status = run_preflight(spark, output_dir=OUTPUT_DIR) if PREFLIGHT_ONLY else run_12_week_validation(spark, output_dir=OUTPUT_DIR)
+if PREFLIGHT_ONLY:
+    print("Starting rolling validation preflight")
+    status = run_preflight(spark, output_dir=OUTPUT_DIR)
+elif SMOKE_ONLY:
+    print("Starting rolling validation smoke test; official submission disabled")
+    status = run_smoke_test(spark, output_dir=OUTPUT_DIR)
+else:
+    print("Starting organizer-style rolling validation; official submission disabled")
+    status = run_12_week_validation(spark, output_dir=OUTPUT_DIR)
 print(json.dumps(status, indent=2, sort_keys=True, default=str))
 if PREFLIGHT_ONLY and "dbutils" in globals():
     dbutils.notebook.exit(json.dumps({"result": "ROLLING VALIDATION PREFLIGHT: PASS", **status}, sort_keys=True, default=str))
+if SMOKE_ONLY and "dbutils" in globals():
+    dbutils.notebook.exit(json.dumps({"result": "ROLLING VALIDATION SMOKE TEST: PASS", **status}, sort_keys=True, default=str))
 status

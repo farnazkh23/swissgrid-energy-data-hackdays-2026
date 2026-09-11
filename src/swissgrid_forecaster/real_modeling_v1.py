@@ -406,6 +406,23 @@ def _lookup(series: Mapping[datetime, float], stamp: datetime, issue: datetime, 
     return series.get(valid) if valid <= issue else None
 
 
+def _seasonal_persistence_value(series: Mapping[datetime, float], stamp: datetime,
+                                issue: datetime) -> tuple[float, str]:
+    """Return a deterministic causal seasonal value and its fallback label."""
+    exact = _lookup(series, stamp, issue, 168)
+    if exact is not None:
+        return exact, "exact_168h"
+    for lag, label in ((167, "nearby_167h"), (169, "nearby_169h"),
+                       (336, "previous_week_336h")):
+        value = _lookup(series, stamp, issue, lag)
+        if value is not None:
+            return value, label
+    causal = [(timestamp, value) for timestamp, value in series.items() if timestamp <= issue]
+    if causal:
+        return max(causal, key=lambda item: item[0])[1], "latest_causal"
+    raise ValueError("seasonal persistence has no causal historical value")
+
+
 def _lseg_lag(features: LSEGFeatures, name: str, stamp: datetime, issue: datetime, lag: int) -> float | None:
     item = features.series.get(name, {}).get(stamp - timedelta(hours=lag))
     return item[0] if item is not None and item[1] <= issue else None
@@ -637,27 +654,32 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
             for model_name in model_names:
                 model = models[model_name]
                 point = []
+                fallback_methods = []
                 for features, _ in future:
                     if model_name == "seasonal_persistence":
-                        seasonal = _lookup(target_series[target], fold.forecast_timestamps[len(point)], fold.issue_time, 168)
-                        if seasonal is None:
-                            raise ValueError("seasonal persistence value is unavailable at the fold issue time")
+                        seasonal, fallback_method = _seasonal_persistence_value(
+                            target_series[target], fold.forecast_timestamps[len(point)], fold.issue_time)
                         point.append(seasonal)
+                        fallback_methods.append(fallback_method)
                     else: point.append(model.predict(features))
                 truth = [actual for _, actual in future]
                 target_seed = sum(ord(char) for char in target)
                 samples = [_sample(value, residuals, seed + fold_index * 1000003 + target_seed * 1009 + index) for index, value in enumerate(point)]
                 score = _fold_metric(truth, point, samples)
-                fold_scores.append({"fold_id": fold.fold_id, "model": model_name, "target": target, **score, "sample_count": 300})
+                fold_scores.append({"fold_id": fold.fold_id, "model": model_name, "target": target, **score,
+                                    "sample_count": 300,
+                                    "seasonal_fallbacks": dict((name, fallback_methods.count(name))
+                                                               for name in set(fallback_methods))})
                 if collect_predictions:
                     point_predictions.extend(
                         {"fold_id": fold.fold_id, "row_id": f"{fold.fold_id}:{stamp.isoformat()}",
                          "timestamp": stamp.isoformat(),
                          "issue_time": fold.issue_time.isoformat(),
                          "horizon": int((stamp - fold.issue_time).total_seconds() / 3600),
-                         "model": model_name, "target": target, "actual": actual,
-                         "pred": prediction}
-                        for stamp, actual, prediction in zip(fold.forecast_timestamps, truth, point)
+                          "model": model_name, "target": target, "actual": actual,
+                          "pred": prediction,
+                          "seasonal_fallback": (fallback_methods[index] if fallback_methods else None)}
+                        for index, (stamp, actual, prediction) in enumerate(zip(fold.forecast_timestamps, truth, point))
                     )
     for model in model_names:
         for target in TARGETS:

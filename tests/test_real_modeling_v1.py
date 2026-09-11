@@ -6,6 +6,7 @@ from swissgrid_forecaster.real_modeling_v1 import (
     _sample,
     build_hourly_targets,
     build_features,
+    _seasonal_persistence_value,
     make_weekly_folds,
 )
 from swissgrid_forecaster.time_contract import canonical_utc, organizer_timestamp
@@ -106,6 +107,24 @@ class RealModelingV1Tests(unittest.TestCase):
             canonical_utc(datetime(2025, 10, 26, 2, 0), "Europe/Zurich")
         self.assertEqual(organizer_timestamp(datetime(2026, 8, 20, 23, 0)),
                          datetime(2026, 8, 20, 23, 0, tzinfo=timezone.utc))
+
+    def test_seasonal_persistence_falls_back_across_missing_dst_reference(self):
+        issue = datetime(2026, 4, 5, 23, tzinfo=timezone.utc)
+        target = datetime(2026, 4, 5, 2, tzinfo=timezone.utc)
+        missing = datetime(2026, 3, 29, 2, tzinfo=timezone.utc)
+        series = {issue - timedelta(hours=index): float(index) for index in range(672)}
+        series.pop(missing, None)
+        value, method = _seasonal_persistence_value(series, target, issue)
+        self.assertEqual(method, "nearby_167h")
+        self.assertEqual(value, series[target - timedelta(hours=167)])
+        again = _seasonal_persistence_value(series, target, issue)
+        self.assertEqual((value, method), again)
+
+    def test_seasonal_persistence_uses_exact_lag_normally(self):
+        issue = datetime(2026, 4, 5, 23, tzinfo=timezone.utc)
+        target = datetime(2026, 4, 5, 2, tzinfo=timezone.utc)
+        series = {target - timedelta(hours=168): 42.0, issue: 99.0}
+        self.assertEqual(_seasonal_persistence_value(series, target, issue), (42.0, "exact_168h"))
 
 
 if __name__ == "__main__":

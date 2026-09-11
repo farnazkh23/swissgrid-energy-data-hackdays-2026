@@ -28,6 +28,7 @@ WEEK_HOURS = 168
 TRAIN_HOURS = 672
 VALIDATION_WEEKS = 12
 WARM_START_WEEKS = 8
+MAX_FEATURE_LAG_HOURS = 168
 SAMPLES_PER_TARGET = 300
 POINT_MODELS = ("ridge", "seasonal_persistence", "hist_gradient_boosting")
 UNCERTAINTY_METHODS = {
@@ -41,6 +42,44 @@ UNCERTAINTY_METHODS = {
 
 def _iso(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")
+
+
+def history_requirements(first_validation_start: datetime, *, warm_start_weeks: int = WARM_START_WEEKS,
+                         train_hours: int = TRAIN_HOURS,
+                         max_feature_lag_hours: int = MAX_FEATURE_LAG_HOURS) -> dict:
+    """Compute the earliest target timestamp needed by training and warm-start OOF."""
+    week1_issue = first_validation_start - HOUR
+    week1_train_start = week1_issue - timedelta(hours=train_hours - 1)
+    warm_forecast_start = first_validation_start - timedelta(hours=warm_start_weeks * WEEK_HOURS + 1)
+    warm_issue = warm_forecast_start - HOUR
+    warm_train_start = warm_issue - timedelta(hours=train_hours - 1)
+    required_earliest = warm_train_start - timedelta(hours=max_feature_lag_hours)
+    return {
+        "first_validation_start": first_validation_start,
+        "week1_issue_time": week1_issue,
+        "week1_train_start": week1_train_start,
+        "warm_start_weeks": warm_start_weeks,
+        "warm_start_hours": warm_start_weeks * WEEK_HOURS,
+        "warm_forecast_start": warm_forecast_start,
+        "warm_issue_time": warm_issue,
+        "warm_train_start": warm_train_start,
+        "train_hours": train_hours,
+        "max_feature_lag_hours": max_feature_lag_hours,
+        "required_earliest": required_earliest,
+    }
+
+
+def require_history(available_timestamps, requirements: dict) -> None:
+    """Fail clearly when the loaded hourly history starts after the requirement."""
+    available = tuple(sorted(available_timestamps))
+    if not available:
+        raise ValueError("insufficient pre-validation history: no hourly target timestamps loaded")
+    required = requirements["required_earliest"]
+    if available[0] > required:
+        raise ValueError(
+            "insufficient pre-validation history: required earliest timestamp "
+            f"{_iso(required)}, loaded history starts at {_iso(available[0])}"
+        )
 
 
 def build_validation_folds(
@@ -239,6 +278,8 @@ def run_rolling_validation(*, hourly_targets, realizations, output_dir=None,
     """Run the 12-week organizer-style validation harness without submission."""
     validate_output_targets(TARGETS)
     validation_timestamps = tuple(sorted(realizations))
+    requirements = history_requirements(validation_timestamps[0], warm_start_weeks=warm_start_weeks)
+    require_history(hourly_targets, requirements)
     folds = build_validation_folds(validation_timestamps, hourly_targets, weeks=validation_weeks)
     warm_folds = ()
     if warm_start_weeks:
@@ -279,7 +320,7 @@ def run_rolling_validation(*, hourly_targets, realizations, output_dir=None,
             target_rows[target].append(target_metrics[target])
     scores = [row["official_local_score"] for row in week_rows]
     development_scores = scores[:validation_weeks - 1]
-    summary = {"weeks_completed": len(week_rows), "development_weeks": validation_weeks - 1, "holdout_week": validation_weeks, "mean_score_weeks_1_11": mean(development_scores), "median_score_weeks_1_11": median(development_scores), "worst_score_weeks_1_11": min(development_scores), "std_score_weeks_1_11": pstdev(development_scores), "week_12_holdout_score": scores[-1], "all_12_mean_score": mean(scores), "all_12_median_score": median(scores), "warm_start_weeks": warm_start_weeks, "historical_calibration_timestamps": [_iso(timestamp) for fold in warm_folds for timestamp in fold.forecast_timestamps]}
+    summary = {"weeks_completed": len(week_rows), "development_weeks": validation_weeks - 1, "holdout_week": validation_weeks, "mean_score_weeks_1_11": mean(development_scores), "median_score_weeks_1_11": median(development_scores), "worst_score_weeks_1_11": min(development_scores), "std_score_weeks_1_11": pstdev(development_scores), "week_12_holdout_score": scores[-1], "all_12_mean_score": mean(scores), "all_12_median_score": median(scores), "history_requirements": {key: (_iso(value) if isinstance(value, datetime) else value) for key, value in requirements.items()}, "warm_start_weeks": warm_start_weeks, "historical_calibration_timestamps": [_iso(timestamp) for fold in warm_folds for timestamp in fold.forecast_timestamps]}
     by_target = {}
     for target in TARGETS:
         rows = target_rows[target]

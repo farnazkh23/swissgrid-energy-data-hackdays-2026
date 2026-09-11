@@ -22,7 +22,10 @@ for path in (REPO_SRC, EDH_SOURCE_ROOT):
         sys.path.insert(0, path)
 
 from swissgrid_forecaster.real_modeling_v1 import _hourly_table, build_hourly_targets
-from swissgrid_forecaster.rolling_validation import TRAIN_HOURS, VALIDATION_WEEKS, run_rolling_validation
+from swissgrid_forecaster.rolling_validation import (
+    TRAIN_HOURS, VALIDATION_WEEKS, WARM_START_WEEKS, history_requirements,
+    require_history, run_rolling_validation,
+)
 from swissgrid_forecaster.target_contract import INPUT_COUNTRIES, TARGETS
 from edh2026.local_scoring import score_prediction_table
 
@@ -99,7 +102,8 @@ def run_12_week_validation(spark, *, output_dir):
     validation = tuple(sorted(validation, key=lambda row: row["timestamp"]))
     first = validation[0]["timestamp"]
     last = validation[-1]["timestamp"]
-    start = first - timedelta(hours=TRAIN_HOURS + 168)
+    requirements = history_requirements(first, warm_start_weeks=WARM_START_WEEKS)
+    start = requirements["required_earliest"]
     end_exclusive = last + timedelta(hours=1)
     net_dataframe = spark.table("edh.input.net_positions").select("Zeitstempel", *INPUT_COUNTRIES)
     net = _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(start)) & (F.col("Zeitstempel") < F.lit(end_exclusive))))
@@ -107,6 +111,15 @@ def run_12_week_validation(spark, *, output_dir):
     ntc = _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive)
     generation = _generation_rows(spark, start, end_exclusive)
     hourly_targets = build_hourly_targets(net)
+    print("Rolling validation history diagnostics:")
+    print("  first available hourly target:", min(hourly_targets) if hourly_targets else None)
+    print("  last available hourly target:", max(hourly_targets) if hourly_targets else None)
+    print("  required earliest timestamp:", requirements["required_earliest"])
+    print("  Week 1 training start:", requirements["week1_train_start"])
+    print("  Week 1 issue time:", requirements["week1_issue_time"])
+    print("  historical warm-start weeks:", requirements["warm_start_weeks"])
+    print("  historical warm-start hours:", requirements["warm_start_hours"])
+    require_history(hourly_targets, requirements)
     realizations = {row["timestamp"]: {target: float(row[f"{target}_actual"]) for target in TARGETS} for row in validation}
     tables = {
         "edh.input.cross_border_exchanges": _hourly_table(cross),

@@ -7,7 +7,8 @@ from pathlib import Path
 from swissgrid_forecaster.real_modeling_v1 import WeeklyFold
 from swissgrid_forecaster.rolling_validation import (
     HOUR, TARGETS, WEEK_HOURS, _score_week, build_validation_folds,
-    organizer_local_score, run_rolling_validation, validate_validation_folds,
+    history_requirements, organizer_local_score, require_history,
+    run_rolling_validation, validate_validation_folds,
 )
 
 
@@ -16,9 +17,9 @@ T0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 def synthetic_data():
     warm_start_weeks = 2
-    data_start = T0 - HOUR
-    all_timestamps = tuple(data_start + timedelta(hours=index) for index in range(673 + warm_start_weeks * 168 + 12 * 168))
-    validation = all_timestamps[673 + warm_start_weeks * 168:]
+    data_start = T0 - timedelta(hours=169)
+    all_timestamps = tuple(data_start + timedelta(hours=index) for index in range(169 + 672 + warm_start_weeks * 168 + 12 * 168))
+    validation = all_timestamps[169 + 672 + warm_start_weeks * 168:]
     targets = {
         timestamp: {"AT": float(index + 10), **{
             target: float(index + target_index * 100)
@@ -32,6 +33,20 @@ def synthetic_data():
 
 
 class RollingValidationTests(unittest.TestCase):
+    def test_history_requirements_include_warm_start_and_lag_buffer(self):
+        first = datetime(2026, 5, 29, tzinfo=timezone.utc)
+        requirements = history_requirements(first, warm_start_weeks=8)
+        self.assertEqual(requirements["week1_train_start"], datetime(2026, 5, 1, tzinfo=timezone.utc))
+        self.assertEqual(requirements["week1_issue_time"], datetime(2026, 5, 28, 23, tzinfo=timezone.utc))
+        self.assertEqual(requirements["warm_train_start"], datetime(2026, 3, 5, 23, tzinfo=timezone.utc))
+        self.assertEqual(requirements["required_earliest"], datetime(2026, 2, 26, 23, tzinfo=timezone.utc))
+
+    def test_missing_pre_validation_history_has_precise_error(self):
+        first = datetime(2026, 5, 29, tzinfo=timezone.utc)
+        requirements = history_requirements(first, warm_start_weeks=8)
+        with self.assertRaisesRegex(ValueError, "2026-02-26T23:00:00Z"):
+            require_history((datetime(2026, 3, 1, tzinfo=timezone.utc),), requirements)
+
     def test_builds_twelve_fixed_origin_weeks_without_future_training(self):
         all_timestamps, validation, _, _ = synthetic_data()
         folds = build_validation_folds(validation, all_timestamps)

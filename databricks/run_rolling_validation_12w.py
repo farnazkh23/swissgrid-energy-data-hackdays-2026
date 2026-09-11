@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import json
 import sys
+from time import perf_counter
 from collections import defaultdict
 
 from pyspark.sql import functions as F
@@ -36,6 +37,7 @@ UTC = timezone.utc
 VALIDATION_TABLE = "edh.group_0.g4_validation_realizations"
 GENERATION_ALLOWED_FIELD = "generation_forecast"
 GENERATION_FORBIDDEN_FIELDS = frozenset({"actual_generation", "scheduled_consumption"})
+TIMING_EVENTS = []
 
 
 def _utc(value):
@@ -95,6 +97,23 @@ def _print_gap_report(label, expected, available):
     print(f"  {label} first 20 missing timestamps: {list(missing[:20])}")
 
 
+def _timed(label, function):
+    start_message = f"[{label}] START"
+    print(start_message)
+    TIMING_EVENTS.append(start_message)
+    started = perf_counter()
+    value = function()
+    message = f"[{label}] DONE {perf_counter() - started:.1f}s"
+    print(message)
+    TIMING_EVENTS.append(message)
+    return value
+
+
+def _progress(message):
+    print(message)
+    TIMING_EVENTS.append(message)
+
+
 def _official_score(spark, predictions, actuals, timestamps):
     """Call the organizer's local evaluator on two temporary 168-row views."""
     prediction_rows = [(timestamp, *[predictions[timestamp][target] for target in TARGETS])
@@ -111,11 +130,14 @@ def _official_score(spark, predictions, actuals, timestamps):
 
 
 def run_12_week_validation(spark, *, output_dir):
+    TIMING_EVENTS.clear()
     spark.conf.set("spark.sql.session.timeZone", "UTC")
-    validation = _rows(spark.table(VALIDATION_TABLE).select("timestamp", "CH_actual", "DE_actual", "FR_actual", "IT_actual"))
+    validation = _timed("Spark/history load", lambda: _rows(spark.table(VALIDATION_TABLE).select("timestamp", "CH_actual", "DE_actual", "FR_actual", "IT_actual")))
     if len(validation) != VALIDATION_WEEKS * 168:
         raise ValueError("organizer validation table is not exactly 12 weeks")
     validation = tuple(sorted(validation, key=lambda row: row["timestamp"]))
+    validation_weeks = 1 if DEBUG_ONE_FOLD else VALIDATION_WEEKS
+    validation = validation[:validation_weeks * 168]
     first = validation[0]["timestamp"]
     last = validation[-1]["timestamp"]
     requirements = history_requirements(first, warm_start_weeks=WARM_START_WEEKS)
@@ -123,11 +145,10 @@ def run_12_week_validation(spark, *, output_dir):
     end_exclusive = last + timedelta(hours=1)
     net_dataframe = spark.table("edh.input.net_positions").select("Zeitstempel", *INPUT_COUNTRIES)
     query_start, query_end = source_query_bounds(start, end_exclusive, "UTC")
-    net = _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(query_start)) & (F.col("Zeitstempel") < F.lit(query_end))),
-                 timestamp_timezone="UTC")
-    cross = _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive)
-    ntc = _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive)
-    generation = _generation_rows(spark, start, end_exclusive)
+    net = _timed("Spark/history load", lambda: _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(query_start)) & (F.col("Zeitstempel") < F.lit(query_end))), timestamp_timezone="UTC"))
+    cross = _timed("cross-border load", lambda: _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive))
+    ntc = _timed("NTC load", lambda: _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive))
+    generation = _timed("generation load", lambda: _generation_rows(spark, start, end_exclusive))
     hourly_targets = build_hourly_targets(net)
     print("Rolling validation history diagnostics:")
     print("  canonical source contract: organizer timestamp coordinate preserved; aware UTC label only")
@@ -157,15 +178,16 @@ def run_12_week_validation(spark, *, output_dir):
         tables["edh.input.generation_forecast"] = _hourly_table(generation)
     result = run_rolling_validation(hourly_targets=hourly_targets, realizations=realizations,
                                     db_tables=tables, output_dir=output_dir,
-                                    validation_weeks=VALIDATION_WEEKS,
+                                    validation_weeks=validation_weeks,
+                                    progress=_progress,
                                     official_score_fn=lambda predictions, actuals, timestamps:
                                     _official_score(spark, predictions, actuals, timestamps))
     status = {"validation_table": VALIDATION_TABLE, "targets": list(TARGETS),
-              "validation_weeks": VALIDATION_WEEKS, "development_weeks": 11,
-              "holdout_week": 12, "official_submission_called": False,
+              "validation_weeks": validation_weeks, "development_weeks": max(0, validation_weeks - 1),
+              "holdout_week": validation_weeks, "official_submission_called": False,
               "output_dir": str(output_dir), "net_rows_collected": len(net),
               "generation_forecast_rows_collected": len(generation),
-              "summary": result["summary"]}
+              "summary": result["summary"], "timing_events": list(TIMING_EVENTS)}
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     (Path(output_dir) / "run_status.json").write_text(json.dumps(status, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return status
@@ -196,9 +218,9 @@ def run_preflight(spark, *, output_dir):
     warm_folds = build_warm_start_folds(first, hourly_targets, weeks=WARM_START_WEEKS)
     validate_validation_folds((*warm_folds, *validation_folds))
     print("Preflight folds: warm", len(warm_folds), "validation", len(validation_folds), "holdout week 12")
-    cross = _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive)
-    ntc = _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive)
-    generation = _generation_rows(spark, start, end_exclusive)
+    cross = _timed("cross-border load", lambda: _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive))
+    ntc = _timed("NTC load", lambda: _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive))
+    generation = _timed("generation load", lambda: _generation_rows(spark, start, end_exclusive))
     if any(name in row for row in generation for name in ("actual_generation", "scheduled_consumption")):
         raise ValueError("preflight: forbidden generation fields were loaded")
     print("Preflight feature rows: cross_border", len(cross), "ntc", len(ntc), "generation_forecast", len(generation))
@@ -220,6 +242,7 @@ def run_preflight(spark, *, output_dir):
 
 def run_smoke_test(spark, *, output_dir):
     """Fit all point candidates on the warm fold crossing the DST reference."""
+    TIMING_EVENTS.clear()
     spark.conf.set("spark.sql.session.timeZone", "UTC")
     validation = tuple(sorted(_rows(spark.table(VALIDATION_TABLE).select("timestamp", "CH_actual", "DE_actual", "FR_actual", "IT_actual")), key=lambda row: row["timestamp"]))
     first, last = validation[0]["timestamp"], validation[-1]["timestamp"]
@@ -227,14 +250,19 @@ def run_smoke_test(spark, *, output_dir):
     start, end_exclusive = requirements["required_earliest"], last + timedelta(hours=1)
     net_dataframe = spark.table("edh.input.net_positions").select("Zeitstempel", *INPUT_COUNTRIES)
     query_start, query_end = source_query_bounds(start, end_exclusive, "UTC")
-    net = _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(query_start)) & (F.col("Zeitstempel") < F.lit(query_end))))
+    net = _timed(
+        "Spark/history load",
+        lambda: _rows(net_dataframe.where(
+            (F.col("Zeitstempel") >= F.lit(query_start))
+            & (F.col("Zeitstempel") < F.lit(query_end))))
+    )
     hourly_targets = build_hourly_targets(net)
     require_history(hourly_targets, requirements)
     warm_folds = build_warm_start_folds(first, hourly_targets, weeks=WARM_START_WEEKS)
     affected_index, affected = next(((index, fold) for index, fold in enumerate(warm_folds) if any(timestamp - timedelta(hours=168) not in hourly_targets for timestamp in fold.forecast_timestamps)), (len(warm_folds) - 1, warm_folds[-1]))
-    cross = _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive)
-    ntc = _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive)
-    generation = _generation_rows(spark, start, end_exclusive)
+    cross = _timed("cross-border load", lambda: _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive))
+    ntc = _timed("NTC load", lambda: _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive))
+    generation = _timed("generation load", lambda: _generation_rows(spark, start, end_exclusive))
     tables = {"edh.input.cross_border_exchanges": _hourly_table(cross), "edh.input.ntc_month": _hourly_table(ntc)}
     if generation:
         tables["edh.input.generation_forecast"] = _hourly_table(generation)
@@ -251,7 +279,7 @@ def run_smoke_test(spark, *, output_dir):
     _, scores, predictions = _run_scenario(
         targets=hourly_targets, db_tables=tables, lseg=LSEGFeatures({}, {}, {}, ()),
         folds=smoke_folds, use_lseg=False, scenario="rolling_validation_smoke",
-        seed=20260910, model_names=POINT_MODELS, collect_predictions=True)
+        seed=20260910, model_names=POINT_MODELS, collect_predictions=True, progress=_progress)
     expected = len(POINT_MODELS) * len(TARGETS) * 168 * 2
     if len(predictions) != expected or len(scores) != len(POINT_MODELS) * len(TARGETS) * 2:
         raise ValueError("smoke test did not produce all point-model predictions")
@@ -265,34 +293,53 @@ def run_smoke_test(spark, *, output_dir):
                                      for target in TARGETS)))
     if len(prior_rows) < 2:
         raise ValueError("smoke test lacks prior residual rows for uncertainty fitting")
+    uncertainty_started = perf_counter()
+    print("[SMOKE] uncertainty fit START")
+    TIMING_EVENTS.append("[SMOKE] uncertainty fit START")
     uncertainty = fit_uncertainty_model(ResidualPanel(TARGETS, tuple(prior_rows)),
                                         method="correlated_gaussian", fit_cutoff=affected.issue_time)
+    uncertainty_message = f"[SMOKE] uncertainty fit DONE {perf_counter() - uncertainty_started:.1f}s"
+    print(uncertainty_message)
+    TIMING_EVENTS.append(uncertainty_message)
     point_forecasts = {timestamp: {target: seasonal[(affected.fold_id, timestamp, target)] for target in TARGETS}
                        for timestamp in affected.forecast_timestamps}
+    samples_started = perf_counter()
+    print("[SMOKE] 300-sample generation START")
+    TIMING_EVENTS.append("[SMOKE] 300-sample generation START")
     samples = {}
     for index, timestamp in enumerate(affected.forecast_timestamps):
         samples[timestamp] = sample_distribution(
             uncertainty, point_forecasts[timestamp], seed=20260910 + index,
             n_samples=300)
+    samples_message = f"[SMOKE] 300-sample generation DONE {perf_counter() - samples_started:.1f}s"
+    print(samples_message)
+    TIMING_EVENTS.append(samples_message)
     if any(len(samples[timestamp][target]) != 300 or
            any(not isinstance(value, int) for value in samples[timestamp][target])
            for timestamp in samples for target in TARGETS):
         raise ValueError("smoke test did not produce 300 integer samples")
     actuals = {timestamp: {target: hourly_targets[timestamp][target] for target in TARGETS}
                for timestamp in affected.forecast_timestamps}
+    scorer_started = perf_counter()
+    print("[SMOKE] local scorer START")
+    TIMING_EVENTS.append("[SMOKE] local scorer START")
     score = _official_score(spark, samples, actuals, affected.forecast_timestamps)
+    scorer_message = f"[SMOKE] local scorer DONE {perf_counter() - scorer_started:.1f}s"
+    print(scorer_message)
+    TIMING_EVENTS.append(scorer_message)
     if score is None:
         raise ValueError("smoke test organizer scorer returned no score")
     print("Smoke fold:", affected.fold_id, "issue_time:", affected.issue_time)
     print("Smoke uncertainty: correlated_gaussian, organizer score:", score)
     print("ROLLING VALIDATION SMOKE TEST: PASS")
-    return {"smoke": "PASS", "fold_id": affected.fold_id, "predictions": len(predictions), "models": list(POINT_MODELS), "uncertainty": "correlated_gaussian", "score": float(score)}
+    return {"smoke": "PASS", "fold_id": affected.fold_id, "predictions": len(predictions), "models": list(POINT_MODELS), "uncertainty": "correlated_gaussian", "score": float(score), "timing_events": list(TIMING_EVENTS)}
 
 
 # Databricks execution cell.  Open this file and Run all.  Keep preflight on
 # until its PASS result is visible before starting the expensive model run.
 PREFLIGHT_ONLY = True
 SMOKE_ONLY = False
+DEBUG_ONE_FOLD = False
 VALIDATION_WEEKS = 12
 OUTPUT_DIR = "/Workspace/Users/user32@swissgridlab.onmicrosoft.com/swissgrid_backtest_outputs/rolling_validation_12w"
 if PREFLIGHT_ONLY:
@@ -301,6 +348,10 @@ if PREFLIGHT_ONLY:
 elif SMOKE_ONLY:
     print("Starting rolling validation smoke test; official submission disabled")
     status = run_smoke_test(spark, output_dir=OUTPUT_DIR)
+elif DEBUG_ONE_FOLD:
+    print("Starting one-fold full-path diagnostic; official submission disabled")
+    status = run_smoke_test(spark, output_dir=OUTPUT_DIR)
+    print("FULL PATH DIAGNOSTIC: PASS")
 else:
     print("Starting organizer-style rolling validation; official submission disabled")
     status = run_12_week_validation(spark, output_dir=OUTPUT_DIR)
@@ -309,4 +360,6 @@ if PREFLIGHT_ONLY and "dbutils" in globals():
     dbutils.notebook.exit(json.dumps({"result": "ROLLING VALIDATION PREFLIGHT: PASS", **status}, sort_keys=True, default=str))
 if SMOKE_ONLY and "dbutils" in globals():
     dbutils.notebook.exit(json.dumps({"result": "ROLLING VALIDATION SMOKE TEST: PASS", **status}, sort_keys=True, default=str))
+if DEBUG_ONE_FOLD and "dbutils" in globals():
+    dbutils.notebook.exit(json.dumps({"result": "FULL PATH DIAGNOSTIC: PASS", **status}, sort_keys=True, default=str))
 status

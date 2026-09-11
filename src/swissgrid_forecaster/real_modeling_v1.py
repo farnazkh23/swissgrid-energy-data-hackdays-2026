@@ -22,6 +22,7 @@ from pathlib import Path
 import posixpath
 import random
 import re
+from time import perf_counter
 from statistics import mean, median
 from typing import Iterable, Mapping
 from xml.etree import ElementTree
@@ -631,7 +632,16 @@ def _summarize(rows: list[dict], *, scenario: str, model: str, target: str) -> d
 
 def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
                   model_names=("seasonal_persistence", "ridge", "hist_gradient_boosting"),
-                  collect_predictions=False):
+                  collect_predictions=False, progress=None):
+    def stage(label):
+        if progress:
+            progress(f"{label} START")
+        return perf_counter()
+
+    def done(label, started):
+        if progress:
+            progress(f"{label} DONE {perf_counter() - started:.1f}s")
+
     fold_scores: list[dict] = []; summaries = []
     point_predictions: list[dict] = []
     target_series = {target: {stamp: row[target] for stamp, row in targets.items()} for target in TARGETS}
@@ -647,14 +657,19 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
             future = [(build_features(target_history=targets, db_tables=db_tables, db_series=db_series, target_series=target_series, lseg=lseg, stamp=stamp, issue=fold.issue_time, use_lseg=use_lseg)[1], targets[stamp][target]) for stamp in fold.forecast_timestamps]
             models = {"seasonal_persistence": None}
             if "ridge" in model_names:
+                started = stage(f"[FOLD {fold_index + 1}][{target}] Ridge")
                 models["ridge"] = Ridge().fit(train)
+                done(f"[FOLD {fold_index + 1}][{target}] Ridge", started)
             if "hist_gradient_boosting" in model_names:
+                started = stage(f"[FOLD {fold_index + 1}][{target}] HistGradientBoosting")
                 models["hist_gradient_boosting"] = HistogramGradientBoosting().fit(train)
+                done(f"[FOLD {fold_index + 1}][{target}] HistGradientBoosting", started)
             residuals = tuple(targets[stamp][target] - targets.get(stamp - timedelta(hours=168), {}).get(target, targets[stamp][target]) for stamp in fold.train_timestamps if target in targets[stamp] and target in targets.get(stamp - timedelta(hours=168), {}))
             for model_name in model_names:
                 model = models[model_name]
                 point = []
                 fallback_methods = []
+                point_started = stage(f"[FOLD {fold_index + 1}][{target}] {'Seasonal Persistence' if model_name == 'seasonal_persistence' else model_name + ' prediction'}")
                 for features, _ in future:
                     if model_name == "seasonal_persistence":
                         seasonal, fallback_method = _seasonal_persistence_value(
@@ -662,9 +677,12 @@ def _run_scenario(*, targets, db_tables, lseg, folds, use_lseg, scenario, seed,
                         point.append(seasonal)
                         fallback_methods.append(fallback_method)
                     else: point.append(model.predict(features))
+                done(f"[FOLD {fold_index + 1}][{target}] {'Seasonal Persistence' if model_name == 'seasonal_persistence' else model_name + ' prediction'}", point_started)
                 truth = [actual for _, actual in future]
                 target_seed = sum(ord(char) for char in target)
+                sample_started = stage(f"[FOLD {fold_index + 1}][{target}] {model_name} 300-sample generation")
                 samples = [_sample(value, residuals, seed + fold_index * 1000003 + target_seed * 1009 + index) for index, value in enumerate(point)]
+                done(f"[FOLD {fold_index + 1}][{target}] {model_name} 300-sample generation", sample_started)
                 score = _fold_metric(truth, point, samples)
                 fold_scores.append({"fold_id": fold.fold_id, "model": model_name, "target": target, **score,
                                     "sample_count": 300,

@@ -341,14 +341,20 @@ def build_hourly_targets(rows: Iterable[Mapping]) -> dict[datetime, dict[str, fl
     result = {}
     for stamp, values in buckets.items():
         row = {}
-        for target in (*TARGETS, *CONTEXT_ONLY_COUNTRIES):
+        for target in TARGETS:
             expected = {stamp + timedelta(minutes=15 * index) for index in range(4)}
             observed = {time for time, _ in values.get(target, ())}
             if len(values.get(target, ())) != 4 or observed != expected or len(observed) != 4:
                 break
             row[target] = mean(value for _, value in values[target])
-        if len(row) == len(TARGETS) + len(CONTEXT_ONLY_COUNTRIES):
-            result[stamp] = row
+        if len(row) != len(TARGETS):
+            continue
+        for context in CONTEXT_ONLY_COUNTRIES:
+            expected = {stamp + timedelta(minutes=15 * index) for index in range(4)}
+            observed = {time for time, _ in values.get(context, ())}
+            if len(values.get(context, ())) == 4 and observed == expected and len(observed) == 4:
+                row[context] = mean(value for _, value in values[context])
+        result[stamp] = row
     return dict(sorted(result.items()))
 
 

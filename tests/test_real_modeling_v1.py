@@ -17,6 +17,16 @@ class RealModelingV1Tests(unittest.TestCase):
                 for index in (0, 1, 2, 3, 3)]
         self.assertEqual(len(build_hourly_targets(rows)), 0)
 
+    def test_missing_optional_at_does_not_drop_scored_target_hour(self):
+        start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        rows = [{"Zeitstempel": start + timedelta(minutes=15 * index),
+                 **{target: float(index) for target in ("CH", "DE", "FR", "IT")}}
+                for index in range(4)]
+        hourly = build_hourly_targets(rows)
+        self.assertEqual(tuple(hourly), (start,))
+        self.assertEqual(set(hourly[start]), {"CH", "DE", "FR", "IT"})
+        self.assertNotIn("AT", hourly[start])
+
     def test_weekly_folds_are_168_hours(self):
         start = datetime(2024, 1, 1, 1, tzinfo=timezone.utc)
         timestamps = tuple(start + timedelta(hours=index) for index in range(672 + 168 * 3))

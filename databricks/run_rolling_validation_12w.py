@@ -79,6 +79,17 @@ def _generation_rows(spark, start, end_exclusive):
     return tuple(rows)
 
 
+def _hour_range(start, end):
+    return tuple(start + timedelta(hours=index)
+                 for index in range(int((end - start).total_seconds() // 3600) + 1))
+
+
+def _print_gap_report(label, expected, available):
+    missing = tuple(timestamp for timestamp in expected if timestamp not in available)
+    print(f"  {label} missing timestamp count: {len(missing)}")
+    print(f"  {label} first 20 missing timestamps: {list(missing[:20])}")
+
+
 def _official_score(spark, predictions, actuals, timestamps):
     """Call the organizer's local evaluator on two temporary 168-row views."""
     prediction_rows = [(timestamp, *[predictions[timestamp][target] for target in TARGETS])
@@ -119,6 +130,18 @@ def run_12_week_validation(spark, *, output_dir):
     print("  Week 1 issue time:", requirements["week1_issue_time"])
     print("  historical warm-start weeks:", requirements["warm_start_weeks"])
     print("  historical warm-start hours:", requirements["warm_start_hours"])
+    available_hours = set(hourly_targets)
+    week1_train = _hour_range(requirements["week1_train_start"], requirements["week1_issue_time"])
+    week1_forecast = _hour_range(first, first + timedelta(hours=167))
+    _print_gap_report("Week 1 train", week1_train, available_hours)
+    _print_gap_report("Week 1 forecast", week1_forecast, available_hours)
+    for warm_index in range(requirements["warm_start_weeks"]):
+        warm_start = requirements["warm_forecast_start"] + timedelta(hours=warm_index * 168)
+        warm_issue = warm_start - timedelta(hours=1)
+        warm_train = _hour_range(warm_issue - timedelta(hours=TRAIN_HOURS - 1), warm_issue)
+        warm_forecast = _hour_range(warm_start, warm_start + timedelta(hours=167))
+        _print_gap_report(f"Warm week {warm_index + 1} train", warm_train, available_hours)
+        _print_gap_report(f"Warm week {warm_index + 1} forecast", warm_forecast, available_hours)
     require_history(hourly_targets, requirements)
     realizations = {row["timestamp"]: {target: float(row[f"{target}_actual"]) for target in TARGETS} for row in validation}
     tables = {

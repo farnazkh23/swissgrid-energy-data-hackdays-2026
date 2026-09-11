@@ -23,8 +23,9 @@ for path in (REPO_SRC, EDH_SOURCE_ROOT):
 
 from swissgrid_forecaster.real_modeling_v1 import _hourly_table, build_hourly_targets
 from swissgrid_forecaster.rolling_validation import (
-    TRAIN_HOURS, VALIDATION_WEEKS, WARM_START_WEEKS, history_requirements,
-    require_history, run_rolling_validation,
+    HOUR, TRAIN_HOURS, VALIDATION_WEEKS, WARM_START_WEEKS, history_requirements,
+    build_validation_folds, require_history, run_rolling_validation,
+    validate_validation_folds,
 )
 from swissgrid_forecaster.target_contract import INPUT_COUNTRIES, TARGETS
 from edh2026.local_scoring import score_prediction_table
@@ -166,10 +167,62 @@ def run_12_week_validation(spark, *, output_dir):
     return status
 
 
-# Databricks execution cell.  Open this file and Run all.
+def run_preflight(spark, *, output_dir):
+    """Fast live-data contract audit; does not fit models or submit anything."""
+    spark.conf.set("spark.sql.session.timeZone", "UTC")
+    validation = _rows(spark.table(VALIDATION_TABLE).select("timestamp", "CH_actual", "DE_actual", "FR_actual", "IT_actual"))
+    validation = tuple(sorted(validation, key=lambda row: row["timestamp"]))
+    if len(validation) != VALIDATION_WEEKS * 168:
+        raise ValueError("preflight: validation table must contain exactly 2016 rows")
+    first, last = validation[0]["timestamp"], validation[-1]["timestamp"]
+    requirements = history_requirements(first, warm_start_weeks=WARM_START_WEEKS)
+    start, end_exclusive = requirements["required_earliest"], last + timedelta(hours=1)
+    net_dataframe = spark.table("edh.input.net_positions").select("Zeitstempel", *INPUT_COUNTRIES)
+    net = _rows(net_dataframe.where((F.col("Zeitstempel") >= F.lit(start)) & (F.col("Zeitstempel") < F.lit(end_exclusive))))
+    hourly_targets = build_hourly_targets(net)
+    require_history(hourly_targets, requirements)
+    print("Preflight target range:", min(hourly_targets), "through", max(hourly_targets))
+    print("Preflight required earliest:", requirements["required_earliest"])
+    week1_train = _hour_range(requirements["week1_train_start"], requirements["week1_issue_time"])
+    week1_forecast = _hour_range(first, first + timedelta(hours=167))
+    _print_gap_report("Week 1 train", week1_train, set(hourly_targets))
+    _print_gap_report("Week 1 forecast", week1_forecast, set(hourly_targets))
+    validation_folds = build_validation_folds(tuple(row["timestamp"] for row in validation), hourly_targets)
+    warm_start = requirements["warm_forecast_start"]
+    warm_timestamps = tuple(warm_start + index * HOUR for index in range(WARM_START_WEEKS * 168))
+    warm_folds = build_validation_folds(warm_timestamps, hourly_targets, weeks=WARM_START_WEEKS)
+    validate_validation_folds((*warm_folds, *validation_folds))
+    print("Preflight folds: warm", len(warm_folds), "validation", len(validation_folds), "holdout week 12")
+    cross = _filtered_rows(spark, "edh.input.cross_border_exchanges", start, end_exclusive)
+    ntc = _filtered_rows(spark, "edh.input.ntc_month", start, end_exclusive)
+    generation = _generation_rows(spark, start, end_exclusive)
+    if any(name in row for row in generation for name in ("actual_generation", "scheduled_consumption")):
+        raise ValueError("preflight: forbidden generation fields were loaded")
+    print("Preflight feature rows: cross_border", len(cross), "ntc", len(ntc), "generation_forecast", len(generation))
+    if not callable(score_prediction_table):
+        raise ValueError("preflight: organizer local scorer is not callable")
+    timestamps = tuple(row["timestamp"] for row in validation[:168])
+    prediction_rows = [(timestamp, [0] * 300, [0] * 300, [0] * 300, [0] * 300) for timestamp in timestamps]
+    realization_rows = [(timestamp, 0.0, 0.0, 0.0, 0.0) for timestamp in timestamps]
+    spark.createDataFrame(prediction_rows, schema="timestamp timestamp, CH array<int>, DE array<int>, FR array<int>, IT array<int>").createOrReplaceTempView("rolling_preflight_predictions")
+    spark.createDataFrame(realization_rows, schema="timestamp timestamp, CH double, DE double, FR double, IT double").createOrReplaceTempView("rolling_preflight_realizations")
+    scorer_result = score_prediction_table("rolling_preflight_predictions", "rolling_preflight_realizations")
+    if scorer_result is None:
+        raise ValueError("preflight: organizer local scorer returned no score")
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    print("Preflight scorer score:", scorer_result)
+    print("ROLLING VALIDATION PREFLIGHT: PASS")
+    return {"preflight": "PASS", "validation_rows": len(validation), "warm_folds": len(warm_folds), "validation_folds": len(validation_folds), "required_earliest": str(start), "scorer_result": float(scorer_result)}
+
+
+# Databricks execution cell.  Open this file and Run all.  Keep preflight on
+# until its PASS result is visible before starting the expensive model run.
+PREFLIGHT_ONLY = True
 VALIDATION_WEEKS = 12
 OUTPUT_DIR = "/Workspace/Users/user32@swissgridlab.onmicrosoft.com/swissgrid_backtest_outputs/rolling_validation_12w"
-print("Starting organizer-style rolling validation; official submission disabled")
-status = run_12_week_validation(spark, output_dir=OUTPUT_DIR)
+print("Starting rolling validation preflight" if PREFLIGHT_ONLY else "Starting organizer-style rolling validation; official submission disabled")
+status = run_preflight(spark, output_dir=OUTPUT_DIR) if PREFLIGHT_ONLY else run_12_week_validation(spark, output_dir=OUTPUT_DIR)
 print(json.dumps(status, indent=2, sort_keys=True, default=str))
+if PREFLIGHT_ONLY and "dbutils" in globals():
+    dbutils.notebook.exit(json.dumps({"result": "ROLLING VALIDATION PREFLIGHT: PASS", **status}, sort_keys=True, default=str))
 status

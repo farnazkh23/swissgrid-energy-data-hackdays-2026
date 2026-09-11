@@ -99,10 +99,20 @@ def build_validation_folds(
     for index in range(weeks):
         forecast = stamps[index * WEEK_HOURS:(index + 1) * WEEK_HOURS]
         issue = forecast[0] - HOUR
-        train = tuple(issue - timedelta(hours=train_hours - 1 - offset)
-                      for offset in range(train_hours))
-        if any(timestamp not in available for timestamp in (*train, *forecast)):
-            raise ValueError(f"fold {index + 1} has unavailable training or validation timestamps")
+        required_train = tuple(issue - timedelta(hours=train_hours - 1 - offset)
+                               for offset in range(train_hours))
+        missing_forecast = tuple(timestamp for timestamp in forecast if timestamp not in available)
+        if missing_forecast:
+            raise ValueError(
+                f"fold {index + 1} has unavailable forecast timestamps: "
+                + ", ".join(_iso(timestamp) for timestamp in missing_forecast[:20])
+            )
+        # A genuine historical source gap may remove one causal training row.
+        # Keep the available observations rather than inventing a label; future
+        # validation rows remain strict and complete above.
+        train = tuple(timestamp for timestamp in required_train if timestamp in available)
+        if not train:
+            raise ValueError(f"fold {index + 1} has no available causal training timestamps")
         if issue >= forecast[0] or any(issue >= timestamp for timestamp in forecast):
             raise ValueError(f"fold {index + 1} violates fixed-origin chronology")
         folds.append(WeeklyFold(f"validation_week_{index + 1:02d}", train, forecast))

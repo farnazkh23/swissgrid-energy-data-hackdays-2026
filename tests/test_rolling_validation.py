@@ -66,6 +66,19 @@ class RollingValidationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_validation_folds(bad)
 
+    def test_genuine_training_gap_is_allowed_but_forecast_gap_is_rejected(self):
+        start = T0 + timedelta(hours=672)
+        forecast = tuple(start + index * HOUR for index in range(168))
+        train = tuple(start - timedelta(hours=index) for index in range(1, 673))
+        available = set((*train, *forecast))
+        available.remove(train[100])
+        folds = build_validation_folds(forecast, available, weeks=1)
+        self.assertEqual(len(folds[0].train_timestamps), 671)
+        self.assertNotIn(train[100], folds[0].train_timestamps)
+        available.remove(forecast[100])
+        with self.assertRaisesRegex(ValueError, "unavailable forecast timestamps"):
+            build_validation_folds(forecast, available, weeks=1)
+
     def test_scorer_rejects_partial_or_misaligned_week(self):
         all_timestamps, validation, targets, realizations = synthetic_data()
         predictions = {timestamp: {target: tuple(int(targets[timestamp][target]) for _ in range(300))

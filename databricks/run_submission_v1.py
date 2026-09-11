@@ -5,6 +5,8 @@ validation and it never invokes an official submission helper.
 """
 
 from datetime import datetime, timedelta, timezone
+from collections import Counter
+from statistics import median
 import sys
 
 from pyspark.sql import functions as F
@@ -33,6 +35,7 @@ TABLE_NAME = "edh.group_0.g4_submission_v1"
 FORECAST_START = datetime(2026, 9, 2, tzinfo=timezone.utc)
 FORECAST_END = datetime(2026, 9, 8, 23, tzinfo=timezone.utc)
 FORECAST_HOURS = 168
+LONG_LEAD_LAGS = (504, 672, 840)
 GENERATION_ALLOWED_FIELD = "generation_forecast"
 GENERATION_FORBIDDEN_FIELDS = frozenset({"actual_generation", "scheduled_consumption"})
 
@@ -97,6 +100,31 @@ def _coverage(rows):
     }
 
 
+def _long_lead_persistence_value(series, stamp, issue):
+    """Use causal weekly references before allowing a latest-value fallback."""
+    point, label = _seasonal_persistence_value(series, stamp, issue)
+    if label != "latest_causal":
+        return point, label
+    references = tuple(
+        series[stamp - timedelta(hours=lag)]
+        for lag in LONG_LEAD_LAGS
+        if stamp - timedelta(hours=lag) <= issue
+        and stamp - timedelta(hours=lag) in series
+    )
+    if references:
+        return median(references), "long_lead_weekly_ensemble"
+    return point, label
+
+
+def _fallback_counts(labels):
+    counts = Counter(labels.values())
+    names = (
+        "exact_168h", "nearby_167h", "nearby_169h", "previous_week_336h",
+        "long_lead_weekly_ensemble", "latest_causal",
+    )
+    return {name: counts.get(name, 0) for name in names}
+
+
 def _validate_submission(dataframe, *, label):
     expected = list(TARGET_COLUMNS)
     if dataframe.columns != expected:
@@ -152,7 +180,7 @@ def _print_diagnostics(rows, dataframe):
         all_values = [sample for row in rows for sample in row[target]]
         print(f"- {target} array length (first row): {len(values)}")
         print(f"- {target} first 3 samples: {values[:3]}")
-        print(f"- {target} min/max/mean samples: {min(all_values)}/{max(all_values)}/{sum(all_values) / len(all_values):.3f}")
+        print(f"- {target} sample means/min/max: {sum(all_values) / len(all_values):.3f}/{min(all_values)}/{max(all_values)}")
 
 
 def run_submission(spark):
@@ -204,17 +232,35 @@ def run_submission(spark):
     print(f"- feature coverage: {coverage}")
 
     target_series = {target: {stamp: row[target] for stamp, row in targets.items()} for target in TARGETS}
+    before_fallbacks = {
+        timestamp: _seasonal_persistence_value(target_series["CH"], timestamp, issue_time)[1]
+        for timestamp in forecast_timestamps
+    }
+    after_fallbacks = {
+        timestamp: _long_lead_persistence_value(target_series["CH"], timestamp, issue_time)[1]
+        for timestamp in forecast_timestamps
+    }
+    print("FALLBACK AUDIT BEFORE FIX")
+    print(f"- counts: {_fallback_counts(before_fallbacks)}")
+    print("FALLBACK AUDIT AFTER FIX")
+    print(f"- counts: {_fallback_counts(after_fallbacks)}")
+    for timestamp in forecast_timestamps:
+        print(f"- {timestamp}: before={before_fallbacks[timestamp]}, after={after_fallbacks[timestamp]}")
+    if _fallback_counts(after_fallbacks)["latest_causal"]:
+        raise ValueError("long-lead forecast still uses latest_causal")
+
     samples_by_target = {target: [] for target in TARGETS}
     for target in TARGETS:
         residuals = tuple(
-            targets[stamp][target] - targets[stamp - timedelta(hours=168)][target]
+            targets[stamp][target] - targets[stamp - timedelta(hours=lag)][target]
             for stamp in train_timestamps
-            if stamp - timedelta(hours=168) in targets
+            for lag in LONG_LEAD_LAGS
+            if stamp - timedelta(hours=lag) in targets
         )
         if not residuals:
-            raise ValueError(f"no causal residuals available for {target}")
+            raise ValueError(f"no causal long-lead residuals available for {target}")
         for index, timestamp in enumerate(forecast_timestamps):
-            point, _ = _seasonal_persistence_value(target_series[target], timestamp, issue_time)
+            point, _ = _long_lead_persistence_value(target_series[target], timestamp, issue_time)
             samples_by_target[target].append(list(_sample(point, residuals, seed=20260911 + index + sum(map(ord, target)) * 1009)))
 
     rows = tuple({"timestamp": timestamp, **{target: samples_by_target[target][index] for target in TARGETS}}
